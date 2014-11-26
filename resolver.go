@@ -58,15 +58,14 @@ func (c Ints) Positive() Ints {
 	}
 }
 
-func (c Ints) Select(func(i int) bool) {
+func (c Ints) Select(fn func(i int) bool) {
 	out := make(chan int)
 	for i := range c {
-		if i > 0 {
+		if fn(i) {
 			out <- i
 		}
 	}
 }
-
 
 
 

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/idna"
-	"github.com/domainr/dnsr"
+	//"github.com/domainr/dnsr"
 	"github.com/miekg/dns"
 	"github.com/wsxiaoys/terminal/color"
 )
@@ -25,7 +25,7 @@ var (
 		ReadTimeout:  timeout,
 		WriteTimeout: timeout,
 	}
-	resolver = dnsr.New(10000)
+	//resolver = dnsr.New(10000)
 )
 
 func init() {
@@ -38,7 +38,7 @@ func init() {
 		"print verbose info to the console",
 	)
 
-	dnsr.Verbose = verbose
+	// dnsr.Verbose = verbose
 }
 
 func logV(fmt string, args ...interface{}) {
@@ -75,8 +75,8 @@ func query(name, rrType string) {
 	}
 
 	q := dns.Question{toLowerFQDN(nameIDNA), dns.StringToType[strings.ToUpper(rrType)], dns.ClassINET}
-	// rrs := exchange(q)
-	rrs := resolver.Resolve(q)
+	rrs := exchange(q)
+	// rrs := resolver.Resolve(q)
 
 	logV("@{g}\n;; RESULTS:\n")
 	for _, rr := range rrs {
