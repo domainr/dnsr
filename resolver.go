@@ -1,22 +1,25 @@
 package dnsr
 
-import "github.com/miekg/dns"
+import (
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/miekg/dns"
+)
 
 type Resolver struct {
-	cache Resolver
+	cache *lru.Cache
 }
 
 func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
 	c := make(chan dns.RR, 20)
 	go func() {
 		defer close(c)
-		rrs, ok := r.cacheGet(qname, qtype)
+		rrs, ok := r.recall(qname, qtype)
 		if ok {
 			inject(c, rrs)
 			return
 		}
-		r.resolveViaAuthorities(c, qname, qtype)
-	}
+		rrememberveViaAuthorities(c, qname, qtype)
+	}()
 	return c
 }
 
@@ -30,7 +33,7 @@ func (r *Resolver) resolveViaAuthorities(c chan<- dns.RR, qname string, qtype dn
 		if !ok {
 			continue
 		}
-		r.resolveViaAuthority(c, ns.NS, qname, qtype)
+		rrememberveViaAuthority(c, ns.NS, qname, qtype)
 	}
 }
 
@@ -57,32 +60,32 @@ func (r *Resolver) resolveViaServer(c chan<- dns.RR, addr, qname string, qtype d
 
 	// FIXME: cache NXDOMAIN responses responsibly
 	if rmsg.Rcode == dns.RcodeNameError {
-		r.cacheSetEmpty(qname, qtype)
+		r.rememberNX(qname, qtype)
 	}
 
 	// Cache responses
-	r.cacheAdd(rMsg.Answer...)
-	r.cacheAdd(rMsg.Ns...)
-	r.cacheAdd(rMsg.Extra...)
+	r.remember(rMsg.Answer...)
+	r.remember(rMsg.Ns...)
+	r.remember(rMsg.Extra...)
 
 	// Check cache again
-	rrs, ok := r.cacheGet(q)
+	rrs, ok := r.recall(q)
 	if ok {
 		inject(c, rrs)
 		return
 	}
 }
 
-func (r *Resolver) cacheGet(qname, qtype) ([]dns.RR, bool) {
+func (r *Resolver) recall(qname, qtype) ([]dns.RR, bool) {
 	// FIXME: implement
-	return []dns.RR{}
+	return []dns.RR{}, false
 }
 
-func (r *Resolver) cacheAdd(rr ...dns.RR) {
+func (r *Resolver) remember(rr ...dns.RR) {
 	// FIXME: implement
 }
 
-func (r *Resolver) cacheSetEmpty(qname, qtype) {
+func (r *Resolver) rememberNX(qname, qtype) {
 	// FIXME: implement
 }
 
