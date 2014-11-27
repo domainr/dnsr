@@ -2,105 +2,92 @@ package dnsr
 
 import "github.com/miekg/dns"
 
-type Resolver interface {
-	Resolve(qname string, qtype dns.Type) ([]dns.RR, error)
-}
-
-type baseResolver struct {
+type Resolver struct {
 	cache Resolver
 }
 
-func (r *baseResolver) Resolve(qname string, qtype dns.Type) ([]dns.RR, error) {
-	rrs, err := r.resolveViaCache(qname, qtype)
-	if err != nil {
-		return nil, err
+func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
+	c := make(chan dns.RR, 20)
+	go func() {
+		defer close(c)
+		rrs, ok := r.cacheGet(qname, qtype)
+		if ok {
+			inject(c, rrs)
+			return
+		}
+		r.resolveViaAuthorities(c, qname, qtype)
 	}
-	if rrs != nil {
-		return rrs, nil
-	}
-	return r.resolveViaAuthority(qname, qtype)
+	return c
 }
 
-func (r *baseResolver) resolveViaAuthority(qname string, qtype dns.Type) ([]dns.RR, error) {
-	rrs, err := r.Resolve(qname, dns.TypeNS)
-	if err != nil {
-		return nil, err
+func (r *Resolver) resolveViaAuthorities(c chan<- dns.RR, qname string, qtype dns.Type) {
+	pname, ok = parent(qname)
+	if !ok {
+		return
 	}
-	return r.resolveViaAuthorities(rrs, qname, qtype)
-}
-
-func (r *baseResolver) resolveViaAuthorities(authorities []dns.RR, qname string, qtype dns.Type) ([]dns.RR, error) {
-	for _, auth := range authorities {
-		ns, ok := auth.(*dns.NS)
+	for rr := range r.Resolve(pname, dns.TypeNS) {
+		ns, ok := rr.(*dns.NS)
 		if !ok {
 			continue
 		}
-		arecords, err := r.Resolve(ns.NS, dns.TypeA)
-		if err != nil {
+		r.resolveViaAuthority(c, ns.NS, qname, qtype)
+	}
+}
+
+func (r *Resolver) resolveViaAuthority(c chan<- dns.RR, nsname, qname string, qtype dns.Type) {
+	for rr := range r.Resolve(nsname, dns.TypeA) {
+		a, ok := rr.(*dns.A)
+		if !ok {
 			continue
 		}
-		return r.resolveViaAddresses(arecords, qname, qtype)
-	}
-	return nil, nil
-}
-
-
-type RecordStream <-chan dns.RR
-
-
-type Ints chan int
-func (c Ints) Positive() Ints {
-	out := make(chan int)
-	for i := range c {
-		if i > 0 {
-			out <- i
-		}
+		addr := a.A.String() + ":53"
+		r.exchange(c, addr, qname, qtype)
 	}
 }
 
-func (c Ints) Select(fn func(i int) bool) {
-	out := make(chan int)
-	for i := range c {
-		if fn(i) {
-			out <- i
-		}
+func (r *Resolver) resolveViaServer(c chan<- dns.RR, addr, qname string, qtype dns.Type) {
+	msg := &dns.Msg{}
+	msg.SetQuestion(q.Name, q.Qtype)
+	msg.MsgHdr.RecursionDesired = false
+	client := &dns.Client{}
+	rmsg, _, err := client.Exchange(msg, addr)
+	if err != nil {
+		return
+	}
+
+	// FIXME: cache NXDOMAIN responses responsibly
+	if rmsg.Rcode == dns.RcodeNameError {
+		r.cacheSetEmpty(qname, qtype)
+	}
+
+	// Cache responses
+	r.cacheAdd(rMsg.Answer...)
+	r.cacheAdd(rMsg.Ns...)
+	r.cacheAdd(rMsg.Extra...)
+
+	// Check cache again
+	rrs, ok := r.cacheGet(q)
+	if ok {
+		inject(c, rrs)
+		return
 	}
 }
 
-
-
-func (r *resolver) Resolve(qname string, qtype dns.Type) RecordStream {
-	return cache.Resolve(qname, qtype).Fallback
+func (r *Resolver) cacheGet(qname, qtype) ([]dns.RR, bool) {
+	// FIXME: implement
+	return []dns.RR{}
 }
 
-// type CachingResolver
-// type FilteredResolver
-
-
-
-
-
-type fallbackResolver struct {
-	primary  Resolver
-	fallback Resolver
+func (r *Resolver) cacheAdd(rr ...dns.RR) {
+	// FIXME: implement
 }
 
-func (r *fallbackResolver) Resolve(qname string, qtype dns.Type) ([]dns.RR, error) {
-	rrs, err := r.primary.Resolve(qname, qtype)
-	if rrs != nil && err == nil {
-		return rrs, err
+func (r *Resolver) cacheSetEmpty(qname, qtype) {
+	// FIXME: implement
+}
+
+func inject(c chan<- dns.RR, rrs []dns.RR) {
+	for _, rr := range rrs {
+		c <- rr
 	}
-	return r.fallback.Resolve(qname, qtype)
-}
-
-type authorityForNameResolver struct {
-	name string
-}
-
-func (r *authorityForNameResolver) Resolve(qname string, qtype dns.Type) ([]dns.RR, error) {
-	auths, err := r.primary.Resolve(r.name, dns.TypeNS)
-}
-
-type authoritiesResolver struct {
-	authorities []string
 }

@@ -143,7 +143,7 @@ func exchange(q dns.Question) []dns.RR {
 
 	// Find authorities (nameservers)
 	nsName := q.Name
-	if q.Qtype == dns.TypeNS {
+	if q.Qtype == dns.TypeNS || true {
 		var ok bool
 		// Query parent for NS queries
 		nsName, ok = parent(q.Name)
