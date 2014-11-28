@@ -1,7 +1,6 @@
 package dnsr
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -32,8 +31,8 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 	c := make(chan dns.RR, 20)
 	go func() {
 		qname = toLowerFQDN(qname)
-		q := &dns.Question{qname, qtype, dns.ClassINET}
-		defer fmt.Printf(";; QUESTION:\n%s\n\n\n", q.String())
+		// q := &dns.Question{qname, qtype, dns.ClassINET}
+		// defer fmt.Printf(";; QUESTION:\n%s\n\n\n", q.String())
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
@@ -61,10 +60,10 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 				qmsg := &dns.Msg{}
 				qmsg.SetQuestion(qname, qtype)
 				qmsg.MsgHdr.RecursionDesired = false
-				fmt.Printf("; Querying DNS server %s for %s\n", addr, qname)
+				// fmt.Printf("; Querying DNS server %s for %s\n", addr, qname)
 				rmsg, _, err := r.client.Exchange(qmsg, addr)
 				if err != nil {
-					fmt.Printf("; ERROR querying DNS server %s for %s: %s\n", addr, qname, err.Error())
+					// fmt.Printf("; ERROR querying DNS server %s for %s: %s\n", addr, qname, err.Error())
 					continue // FIXME: handle errors better from flaky/failing NS servers
 				}
 				if rmsg.Rcode == dns.RcodeNameError {
@@ -91,9 +90,9 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			if !ok {
 				continue
 			}
-			fmt.Printf("; Resolving CNAME: %s\n", cn.Target)
+			// fmt.Printf("; Resolving CNAME: %s\n", cn.Target)
 			for rr := range r.Resolve(cn.Target, qtype) {
-				fmt.Printf("; Resolved CNAME %s to %s\n", cn.Target, rr.String())
+				// fmt.Printf("; Resolved CNAME %s to %s\n", cn.Target, rr.String())
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
@@ -158,7 +157,7 @@ func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
 // cacheSave saves 1 or more DNS records to the resolver cache.
 func (r *Resolver) cacheSave(rrs ...dns.RR) {
 	for _, rr := range rrs {
-		fmt.Printf("; CACHING:\n%s\n", rr.String())
+		// fmt.Printf("; CACHING:\n%s\n", rr.String())
 		h := rr.Header()
 		r.cacheAdd(h.Name, h.Rrtype, rr)
 	}
