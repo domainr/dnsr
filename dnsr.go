@@ -39,9 +39,12 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			inject(c, rrs...)
 			return
 		}
-		pname, ok := parent(qname)
-		if !ok {
-			return
+		pname, ok := qname, true
+		if qtype == dns.TypeNS {
+			pname, ok = parent(qname)
+			if !ok {
+				return
+			}
 		}
 		for nrr := range r.Resolve(pname, dns.TypeNS) {
 			ns, ok := nrr.(*dns.NS)
@@ -58,6 +61,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 				qmsg := &dns.Msg{}
 				qmsg.SetQuestion(qname, qtype)
 				qmsg.MsgHdr.RecursionDesired = false
+				fmt.Printf("; Querying DNS server %s for %s\n", addr, qname)
 				rmsg, _, err := r.client.Exchange(qmsg, addr)
 				if err != nil {
 					fmt.Printf("; ERROR querying DNS server %s for %s: %s\n", addr, qname, err.Error())
@@ -92,6 +96,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 
 func inject(c chan<- dns.RR, rrs ...dns.RR) {
 	for _, rr := range rrs {
+		fmt.Printf("%s\n", rr.String())
 		c <- rr
 	}
 }
@@ -135,7 +140,7 @@ func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
 	}
 	e.m.RLock()
 	defer e.m.RUnlock()
-	rrs := make([]dns.RR, len(e.rrs))
+	rrs := make([]dns.RR, 0, len(e.rrs))
 	for rr, _ := range e.rrs {
 		rrs = append(rrs, rr)
 	}
@@ -166,7 +171,6 @@ func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
 	e.m.Lock()
 	defer e.m.Unlock()
 	for _, rr := range rrs {
-		// fmt.Printf("%s\n", rr.String())
 		e.rrs[rr] = struct{}{}
 		exp := now.Add(time.Duration(rr.Header().Ttl) * time.Second)
 		if exp.Before(e.exp) {
@@ -184,6 +188,5 @@ func (r *Resolver) getEntry(qname string, qtype uint16) *entry {
 	if time.Now().After(e.exp) {
 		return nil
 	}
-	fmt.Printf("; CACHE HIT: %s\n", qname)
 	return e
 }
