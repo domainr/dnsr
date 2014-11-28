@@ -29,7 +29,7 @@ func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
 	c = make(chan dns.RR, 20)
 	go func() {
 		defer close(c)
-		if rrs := r.recall(qname, qtype); rrs != nil {
+		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs)
 			return
 		}
@@ -56,26 +56,25 @@ func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
 					continue // FIXME: handle errors better from flaky/failing NS servers
 				}
 				if rmsg.Rcode == dns.RcodeNameError {
-					r.rememberFor(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
+					r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
 				}
-				r.remember(rmsg.Answer...)
-				r.remember(rmsg.Ns...)
-				r.remember(rmsg.Extra...)
-				if r.recall(qname, qtype) {
+				r.cacheSave(rmsg.Answer...)
+				r.cacheSave(rmsg.Ns...)
+				r.cacheSave(rmsg.Extra...)
+				if r.cacheGet(qname, qtype) {
 					return
 				}
 				break
 			}
 			break
 		}
-		
-		for _, crr := range r.recall(qname, dns.TypeCNAME) {
+		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
 			cn, ok := rr.(*dns.CNAME)
 			if !ok {
 				continue
 			}
 			for rr := range r.Resolve(cn.Target, qtype) {
-				r.rememberFor(qname, qtype, rr)
+				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
 		}
@@ -86,21 +85,21 @@ func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
 func (r *Resolver) cacheRoot() {
 	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
 		if t.Error == nil {
-			r.remember(t.RR)
+			r.cacheSave(t.RR)
 		}
 	}
 }
 
-func (r *Resolver) recall(qname string, qtype dns.Type) []dns.RR {
+func (r *Resolver) cacheGet(qname string, qtype dns.Type) []dns.RR {
 	// FIXME: implement
 	return nil
 }
 
-func (r *Resolver) remember(rrs ...dns.RR) {
+func (r *Resolver) cacheSave(rrs ...dns.RR) {
 	// FIXME: implement
 }
 
-func (r *Resolver) rememberFor(qname string, qtype dns.Type, rrs ...dns.RR) {
+func (r *Resolver) cacheAdd(qname string, qtype dns.Type, rrs ...dns.RR) {
 	// FIXME: implement
 }
 
