@@ -1,7 +1,6 @@
 package dnsr
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -28,15 +27,12 @@ func New(size int) *Resolver {
 	return r
 }
 
-func (r *Resolver) Resolve(qname string, qtype uint16, depth int) <-chan dns.RR {
+func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 	c := make(chan dns.RR, 20)
 	go func() {
 		qname = toLowerFQDN(qname)
-		fmt.Printf("%s %s        ", qname, dns.TypeToString[qtype])
-		defer fmt.Printf("\n")
-		// fmt.Printf("%s;; Resolve: %s %s\n", strings.Repeat("  ", depth), qname, dns.TypeToString[qtype])
-		// q := &dns.Question{qname, qtype, dns.ClassINET}
-		// defer fmt.Printf(";; QUESTION:\n%s\n\n\n", q.String())
+		// fmt.Printf("%s %s        ", qname, dns.TypeToString[qtype])
+		// defer fmt.Printf("\n")
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
@@ -50,14 +46,12 @@ func (r *Resolver) Resolve(qname string, qtype uint16, depth int) <-chan dns.RR 
 			}
 		}
 	outer:
-		for nrr := range r.Resolve(pname, dns.TypeNS, depth+1) {
+		for nrr := range r.Resolve(pname, dns.TypeNS) {
 			ns, ok := nrr.(*dns.NS)
 			if !ok {
-				fmt.Printf("%s; WARNING: non-NS record for %s\n", strings.Repeat("  ", depth), pname)
 				continue
 			}
-			//fmt.Printf("%s;; QUERY: dig @%s %s %s\n", strings.Repeat("  ", depth), ns.Ns, qname, dns.TypeToString[qtype])
-			for arr := range r.Resolve(ns.Ns, dns.TypeA, depth+1) {
+			for arr := range r.Resolve(ns.Ns, dns.TypeA) {
 				a, ok := arr.(*dns.A)
 				if !ok {
 					continue
@@ -68,11 +62,9 @@ func (r *Resolver) Resolve(qname string, qtype uint16, depth int) <-chan dns.RR 
 				qmsg.MsgHdr.RecursionDesired = false
 				rmsg, _, err := r.client.Exchange(qmsg, addr)
 				if err != nil {
-					fmt.Printf("%s; ERROR querying DNS server %s for %s: %s\n", strings.Repeat("  ", depth), addr, qname, err.Error())
 					continue // FIXME: handle errors better from flaky/failing NS servers
 				}
 				if rmsg.Rcode == dns.RcodeNameError {
-					fmt.Printf("%s;; NXDOMAIN: dig @%s %s %s\n", strings.Repeat("  ", depth), addr, qname, dns.TypeToString[qtype])
 					r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
 				}
 				r.cacheSave(rmsg.Answer...)
@@ -97,9 +89,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16, depth int) <-chan dns.RR 
 			if !ok {
 				continue
 			}
-			fmt.Printf("%s;; Resolving CNAME: %s\n", strings.Repeat("  ", depth), cn.Target)
-			for rr := range r.Resolve(cn.Target, qtype, depth+1) {
-				// fmt.Printf("%s; Resolved CNAME %s to %s\n", strings.Repeat("  ", depth), cn.Target, rr.String())
+			for rr := range r.Resolve(cn.Target, qtype) {
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
@@ -164,7 +154,6 @@ func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
 // cacheSave saves 1 or more DNS records to the resolver cache.
 func (r *Resolver) cacheSave(rrs ...dns.RR) {
 	for _, rr := range rrs {
-		// fmt.Printf("; CACHING:\n%s\n", rr.String())
 		h := rr.Header()
 		r.cacheAdd(h.Name, h.Rrtype, rr)
 	}
