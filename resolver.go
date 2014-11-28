@@ -1,114 +1,107 @@
 package dnsr
 
 import (
+	"strings"
+
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
 )
 
 type Resolver struct {
-	cache *lru.Cache
+	cache  *lru.Cache
+	client *dns.Client
 }
 
-func (r *Resolver) Resolve(qname string, qtype dns.Type) *Worker {
-	w := &Worker{
-		r: r,
-		qname: qname,
-		qtype: qtype,
-		done: make(chan struct{}),
-		RRs: make(chan dns.RR, 20),
+func New(size int) *Resolver {
+	if size < 0 {
+		size = 10000
 	}
-	go w.Start()
-	return w
-}
-
-func (r *Resolver) recall(qname, qtype) ([]dns.RR, bool) {
-	// FIXME: implement
-	return []dns.RR{}, false
-}
-
-func (r *Resolver) remember(rr ...dns.RR) {
-	// FIXME: implement
-}
-
-func (r *Resolver) rememberNX(qname, qtype) {
-	// FIXME: implement
-}
-
-
-type Worker struct {
-	r     *Resolver
-	qname string
-	qtype dns.Type
-	done  chan struct{}
-	RRs   chan dns.RR
-}
-
-func (w *Worker) Start() {
-	defer w.Stop()
-	rrs, ok := w.r.recall(w.qname, w.qtype)
-	if ok {
-		inject(w.RRs, rrs)
-		return
+	cache, _ := lru.New(size)
+	r := &Resolver{
+		client: &dns.Client{},
+		cache:  cache,
 	}
-	w.resolveViaAuthorities()
+	r.cacheRoot()
+	return r
 }
 
-func (w *Worker) Stop() {
-	close(w.done)
-	close(w.RRs)
-}
-
-func (w *Worker) resolveViaAuthorities() {
-	pname, ok = parent(w.qname)
-	if !ok {
-		return
-	}
-	for rr := range w.r.Resolve(pname, dns.TypeNS).RRs {
-		ns, ok := rr.(*dns.NS)
-		if !ok {
-			continue
+func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
+	c = make(chan dns.RR, 20)
+	go func() {
+		defer close(c)
+		if rrs := r.recall(qname, qtype); rrs != nil {
+			inject(c, rrs)
+			return
 		}
-		w.resolveViaAuthority(ns.NS)
-	}
-}
-
-func (w *Worker) resolveViaAuthority(nsname) {
-	for rr := range w.r.Resolve(nsname, dns.TypeA).RRs {
-		a, ok := rr.(*dns.A)
+		pname, ok := parent(qname)
 		if !ok {
-			continue
+			return
 		}
-		addr := a.A.String() + ":53"
-		w.resolveViaServer(addr)
+		for nrr := range r.Resolve(pname, dns.TypeNS) {
+			ns, ok := nrr.(*dns.NS)
+			if !ok {
+				continue
+			}
+			for arr := range r.Resolve(ns.NS, dns.TypeA) {
+				a, ok := arr.(*dns.A)
+				if !ok {
+					continue
+				}
+				addr := a.A.String() + ":53"
+				qmsg := &dns.Msg{}
+				qmsg.SetQuestion(q.Name, q.Qtype)
+				qmsg.MsgHdr.RecursionDesired = false
+				rmsg, _, err := r.client.Exchange(qmsg, addr)
+				if err != nil {
+					continue // FIXME: handle errors better from flaky/failing NS servers
+				}
+				if rmsg.Rcode == dns.RcodeNameError {
+					r.rememberFor(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
+				}
+				r.remember(rmsg.Answer...)
+				r.remember(rmsg.Ns...)
+				r.remember(rmsg.Extra...)
+				if r.recall(qname, qtype) {
+					return
+				}
+				break
+			}
+			break
+		}
+		
+		for _, crr := range r.recall(qname, dns.TypeCNAME) {
+			cn, ok := rr.(*dns.CNAME)
+			if !ok {
+				continue
+			}
+			for rr := range r.Resolve(cn.Target, qtype) {
+				r.rememberFor(qname, qtype, rr)
+				c <- rr
+			}
+		}
+	}()
+	return c
+}
+
+func (r *Resolver) cacheRoot() {
+	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
+		if t.Error == nil {
+			r.remember(t.RR)
+		}
 	}
 }
 
-func (w *Worker) resolveViaServer(addr) {
-	msg := &dns.Msg{}
-	msg.SetQuestion(q.Name, q.Qtype)
-	msg.MsgHdr.RecursionDesired = false
-	client := &dns.Client{}
-	rmsg, _, err := client.Exchange(msg, addr)
-	if err != nil {
-		return
-	}
+func (r *Resolver) recall(qname string, qtype dns.Type) []dns.RR {
+	// FIXME: implement
+	return nil
+}
 
-	// FIXME: cache NXDOMAIN responses responsibly
-	if rmsg.Rcode == dns.RcodeNameError {
-		w.r.rememberNX(qname, qtype)
-	}
+func (r *Resolver) remember(rrs ...dns.RR) {
+	// FIXME: implement
+}
 
-	// Cache responses
-	w.r.remember(rMsg.Answer...)
-	w.r.remember(rMsg.Ns...)
-	w.r.remember(rMsg.Extra...)
-
-	// Check cache again
-	rrs, ok := w.r.recall(q)
-	if ok {
-		inject(c, rrs)
-		return
-	}
+func (r *Resolver) rememberFor(qname string, qtype dns.Type, rrs ...dns.RR) {
+	// FIXME: implement
 }
 
 func inject(c chan<- dns.RR, rrs []dns.RR) {
