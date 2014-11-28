@@ -1,6 +1,7 @@
 package dnsr
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -80,7 +81,10 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 		}
 
 		// Only check CNAMES for A and AAAA questions
-		if qtype != dns.TypeA && qtype != dns.TypeAAAA {
+		// if qtype != dns.TypeA && qtype != dns.TypeAAAA {
+		// 	return
+		// }
+		if qtype == dns.TypeCNAME {
 			return
 		}
 
@@ -89,7 +93,10 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			if !ok {
 				continue
 			}
+			r.cacheAdd(qname, qtype, crr)
+			c <- crr
 			for rr := range r.Resolve(cn.Target, qtype) {
+				fmt.Printf("%s\n", rr.String())
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
