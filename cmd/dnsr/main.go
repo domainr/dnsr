@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	verbose   bool
+	verbose  bool
 	resolver = dnsr.New(10000)
 )
 
@@ -51,9 +51,11 @@ func main() {
 	} else if len(args) > 1 {
 		rrType, args = args[len(args)-1], args[:len(args)-1]
 	}
+	start := time.Now()
 	for _, name := range args {
 		query(name, rrType)
 	}
+	color.Printf("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
 }
 
 func query(name, rrType string) {
@@ -77,7 +79,10 @@ func query(name, rrType string) {
 		rrs = append(rrs, rr)
 	}
 
-	logV("@{g}\n;; RESULTS:\n")
+	color.Printf("\n")
+	if len(rrs) > 0 {
+		color.Printf("@{g};; RESULTS:\n")
+	}
 	for _, rr := range rrs {
 		color.Printf("@{g}%s\n", rr.String())
 	}
@@ -89,7 +94,6 @@ func query(name, rrType string) {
 	} else {
 		color.Printf("@{r};; FALSE %s\n", name)
 	}
-	
-	dur := time.Since(start)
-	color.Printf("@{.w};; Elapsed: %s\n", dur.String())
+
+	color.Printf("@{.w};; Elapsed: %s\n", time.Since(start).String())
 }
