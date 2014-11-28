@@ -55,7 +55,7 @@ func main() {
 	for _, name := range args {
 		query(name, rrType)
 	}
-	color.Printf("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
+	logV("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
 }
 
 func query(name, rrType string) {
@@ -95,5 +95,5 @@ func query(name, rrType string) {
 		color.Printf("@{r};; FALSE %s\n", name)
 	}
 
-	color.Printf("@{.w};; Elapsed: %s\n", time.Since(start).String())
+	logV("@{.w};; Elapsed: %s\n", time.Since(start).String())
 }

@@ -59,27 +59,18 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 					qmsg := &dns.Msg{}
 					qmsg.SetQuestion(qname, qtype)
 					qmsg.MsgHdr.RecursionDesired = false
-					fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
+					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
 					rmsg, _, err := r.client.Exchange(qmsg, addr)
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
-					if rmsg.Rcode == dns.RcodeNameError {
-						r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
-					}
 					r.cacheSave(rmsg.Answer...)
 					r.cacheSave(rmsg.Ns...)
 					r.cacheSave(rmsg.Extra...)
-					// if qtype == dns.TypeNS {
-					// 	for _, rr := range rmsg.Ns {
-					// 		if rr.Header().Rrtype == dns.TypeNS {
-					// 			// fmt.Printf("; Found NS server: %s -> %s\n", qname, rr.(*dns.NS).Ns)
-					// 			r.cacheAdd(qname, qtype, rr)
-					// 			// c <- rr
-					// 			// return
-					// 		}
-					// 	}
-					// }
+					if rmsg.Rcode == dns.RcodeNameError {
+						r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
+						return
+					}
 					break outer
 				}
 			}
