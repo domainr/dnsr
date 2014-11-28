@@ -43,7 +43,6 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 		}
 	outer:
 		for ; ok; pname, ok = parent(pname) {
-
 			for nrr := range r.Resolve(pname, dns.TypeNS) {
 				ns, ok := nrr.(*dns.NS)
 				if !ok {
