@@ -202,17 +202,6 @@ func (e *entry) isExpired() bool {
 	return false
 }
 
-func toLowerFQDN(name string) string {
-	return dns.Fqdn(strings.ToLower(name))
-}
-
-func parent(name string) (string, bool) {
-	labels := dns.SplitDomainName(name)
-	if labels == nil {
-		return "", false
-	}
-	return toLowerFQDN(strings.Join(labels[1:], ".")), true
-}
 
 var Verbose = false
 

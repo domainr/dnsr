@@ -86,6 +86,29 @@ func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
 	return c
 }
 
+func parent(name string) (string, bool) {
+	labels := dns.SplitDomainName(name)
+	if labels == nil {
+		return "", false
+	}
+	return toLowerFQDN(strings.Join(labels[1:], ".")), true
+}
+
+func toLowerFQDN(name string) string {
+	return dns.Fqdn(strings.ToLower(name))
+}
+
+type key struct {
+	qname string
+	qtype dns.Type
+}
+
+type entry struct {
+	m   sync.RWMutex
+	exp time.Time
+	rrs map[dns.RR]struct{}
+}
+
 func (r *Resolver) cacheRoot() {
 	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
 		if t.Error == nil {
@@ -94,7 +117,7 @@ func (r *Resolver) cacheRoot() {
 	}
 }
 
-// cacheGet returns a randomly ordered slice of DNS records
+// cacheGet returns a randomly ordered slice of DNS records.
 func (r *Resolver) cacheGet(qname string, qtype dns.Type) []dns.RR {
 	e := r.getEntry(qname, qtype)
 	if e == nil {
@@ -108,13 +131,17 @@ func (r *Resolver) cacheGet(qname string, qtype dns.Type) []dns.RR {
 	}
 }
 
+// cacheSave saves 1 or more DNS records to the resolver cache.
 func (r *Resolver) cacheSave(rrs ...dns.RR) {
 	for _, rr := range rrs {
 		h := rr.Header()
-		r.cacheAdd(h.Name, h.Rrtype, rr)
+		r.cacheAdd(toLowerFQDN(h.Name), h.Rrtype, rr)
 	}
 }
 
+// cacheAdd adds 0 or more DNS records to the resolver cache for a specific
+// domain name and record type. This ensures the cache entry exists, even
+// if empty, for NXDOMAIN responses.
 func (r *Resolver) cacheAdd(qname string, qtype dns.Type, rrs ...dns.RR) {
 	now := time.Now()
 	e := r.getEntry(qname, qtype)
@@ -146,15 +173,4 @@ func (r *Resolver) getEntry(qname string, qtype dns.Type) *entry {
 		return nil
 	}
 	return e
-}
-
-type key struct {
-	qname string
-	qtype dns.Type
-}
-
-type entry struct {
-	m   sync.RWMutex
-	exp time.Time
-	rrs map[dns.RR]struct{}
 }
