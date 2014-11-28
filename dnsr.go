@@ -71,6 +71,9 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 				r.cacheSave(rmsg.Answer...)
 				r.cacheSave(rmsg.Ns...)
 				r.cacheSave(rmsg.Extra...)
+				if qtype == dns.TypeNS && len(rmsg.Ns) > 0 {
+					r.cacheAdd(qname, qtype, rmsg.Ns...)
+				}
 				break outer
 			}
 		}
