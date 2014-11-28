@@ -32,8 +32,6 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 	c := make(chan dns.RR, 20)
 	go func() {
 		qname = toLowerFQDN(qname)
-		// fmt.Printf("%s %s        ", qname, dns.TypeToString[qtype])
-		// defer fmt.Printf("\n")
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
@@ -42,39 +40,49 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 		pname, ok := qname, true
 		if qtype == dns.TypeNS {
 			pname, ok = parent(qname)
-			if !ok {
-				return
-			}
 		}
 	outer:
-		for nrr := range r.Resolve(pname, dns.TypeNS) {
-			ns, ok := nrr.(*dns.NS)
-			if !ok {
-				continue
-			}
-			for arr := range r.Resolve(ns.Ns, dns.TypeA) {
-				a, ok := arr.(*dns.A)
+		for ; ok; pname, ok = parent(pname) {
+
+			for nrr := range r.Resolve(pname, dns.TypeNS) {
+				ns, ok := nrr.(*dns.NS)
 				if !ok {
+					fmt.Printf("; non-NS record!\n")
 					continue
 				}
-				addr := a.A.String() + ":53"
-				qmsg := &dns.Msg{}
-				qmsg.SetQuestion(qname, qtype)
-				qmsg.MsgHdr.RecursionDesired = false
-				rmsg, _, err := r.client.Exchange(qmsg, addr)
-				if err != nil {
-					continue // FIXME: handle errors better from flaky/failing NS servers
+				for arr := range r.Resolve(ns.Ns, dns.TypeA) {
+					a, ok := arr.(*dns.A)
+					if !ok {
+						fmt.Printf("; non-A record!\n")
+						continue
+					}
+					addr := a.A.String() + ":53"
+					qmsg := &dns.Msg{}
+					qmsg.SetQuestion(qname, qtype)
+					qmsg.MsgHdr.RecursionDesired = false
+					fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
+					rmsg, _, err := r.client.Exchange(qmsg, addr)
+					if err != nil {
+						continue // FIXME: handle errors better from flaky/failing NS servers
+					}
+					if rmsg.Rcode == dns.RcodeNameError {
+						r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
+					}
+					r.cacheSave(rmsg.Answer...)
+					r.cacheSave(rmsg.Ns...)
+					r.cacheSave(rmsg.Extra...)
+					if qtype == dns.TypeNS {
+						for _, rr := range rmsg.Ns {
+							if rr.Header().Rrtype == dns.TypeNS {
+								// fmt.Printf("; Found NS server: %s -> %s\n", qname, rr.(*dns.NS).Ns)
+								r.cacheAdd(qname, qtype, rr)
+								// c <- rr
+								// return
+							}
+						}
+					}
+					break outer
 				}
-				if rmsg.Rcode == dns.RcodeNameError {
-					r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
-				}
-				r.cacheSave(rmsg.Answer...)
-				r.cacheSave(rmsg.Ns...)
-				r.cacheSave(rmsg.Extra...)
-				if qtype == dns.TypeNS && len(rmsg.Ns) > 0 {
-					r.cacheAdd(qname, qtype, rmsg.Ns...)
-				}
-				break outer
 			}
 		}
 
@@ -82,6 +90,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			inject(c, rrs...)
 			return
 		}
+		fmt.Printf(";; FAILED: %s %s\n", qname, dns.TypeToString[qtype])
 
 		// Only check CNAMES for A and AAAA questions
 		// if qtype != dns.TypeA && qtype != dns.TypeAAAA {
@@ -186,8 +195,12 @@ func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
 	e.m.Lock()
 	defer e.m.Unlock()
 	for _, rr := range rrs {
+		h := rr.Header()
+		if h.Rrtype != qtype {
+			continue
+		}
 		e.rrs[rr] = struct{}{}
-		exp := now.Add(time.Duration(rr.Header().Ttl) * time.Second)
+		exp := now.Add(time.Duration(h.Ttl) * time.Second)
 		if exp.Before(e.exp) {
 			e.exp = exp
 		}
