@@ -31,10 +31,10 @@ func New(size int) *Resolver {
 func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 	c := make(chan dns.RR, 20)
 	go func() {
+		qname = toLowerFQDN(qname)
 		q := &dns.Question{qname, qtype, dns.ClassINET}
 		defer fmt.Printf(";; QUESTION:\n%s\n\n\n", q.String())
 		defer close(c)
-		qname = toLowerFQDN(qname)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
 			return
@@ -93,9 +93,11 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			}
 			fmt.Printf("; Resolving CNAME: %s\n", cn.Target)
 			for rr := range r.Resolve(cn.Target, qtype) {
+				fmt.Printf("; Resolved CNAME %s to %s\n", cn.Target, rr.String())
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
+			return
 		}
 	}()
 	return c
@@ -103,7 +105,6 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 
 func inject(c chan<- dns.RR, rrs ...dns.RR) {
 	for _, rr := range rrs {
-		fmt.Printf("%s\n", rr.String())
 		c <- rr
 	}
 }
@@ -157,8 +158,9 @@ func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
 // cacheSave saves 1 or more DNS records to the resolver cache.
 func (r *Resolver) cacheSave(rrs ...dns.RR) {
 	for _, rr := range rrs {
+		fmt.Printf("; CACHING:\n%s\n", rr.String())
 		h := rr.Header()
-		r.cacheAdd(toLowerFQDN(h.Name), h.Rrtype, rr)
+		r.cacheAdd(h.Name, h.Rrtype, rr)
 	}
 }
 
@@ -166,6 +168,7 @@ func (r *Resolver) cacheSave(rrs ...dns.RR) {
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
 func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
+	qname = toLowerFQDN(qname)
 	now := time.Now()
 	e := r.getEntry(qname, qtype)
 	if e == nil {
