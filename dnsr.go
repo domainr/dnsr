@@ -89,7 +89,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			inject(c, rrs...)
 			return
 		}
-		fmt.Printf(";; FAILED: %s %s\n", qname, dns.TypeToString[qtype])
+		// fmt.Printf(";; FAILED: %s %s\n", qname, dns.TypeToString[qtype])
 
 		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
 			cn, ok := crr.(*dns.CNAME)
