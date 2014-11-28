@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"code.google.com/p/go.net/idna"
@@ -51,10 +52,16 @@ func main() {
 	} else if len(args) > 1 {
 		rrType, args = args[len(args)-1], args[:len(args)-1]
 	}
+	var wg sync.WaitGroup
 	start := time.Now()
 	for _, name := range args {
-		query(name, rrType)
+		wg.Add(1)
+		go func(name string, rrType string) {
+			query(name, rrType)
+			wg.Done()
+		}(name, rrType)
 	}
+	wg.Wait()
 	logV("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
 }
 
