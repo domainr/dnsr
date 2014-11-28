@@ -80,6 +80,10 @@ func query(name, rrType string) {
 	rrc := resolver.Resolve(qname, qtype)
 	rrs := []dns.RR{}
 	for rr := range rrc {
+		if rr == nil {
+			logV("@{r}\n;; NIL RR!\n")
+			continue
+		}
 		rrs = append(rrs, rr)
 	}
 
