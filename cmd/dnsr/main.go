@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"code.google.com/p/go.net/idna"
-	//"github.com/domainr/dnsr"
+	"github.com/domainr/dnsr"
 	"github.com/miekg/dns"
 	"github.com/wsxiaoys/terminal/color"
 )
@@ -25,7 +25,7 @@ var (
 		ReadTimeout:  timeout,
 		WriteTimeout: timeout,
 	}
-	//resolver = dnsr.New(10000)
+	resolver = dnsr.New(10000)
 )
 
 func init() {
@@ -68,15 +68,20 @@ func main() {
 }
 
 func query(name, rrType string) {
-	nameIDNA, err := idna.ToASCII(name)
+	qname, err := idna.ToASCII(name)
 	if err != nil {
 		color.Fprintf(os.Stderr, "Invalid IDN domain name: %s\n", name)
 		os.Exit(1)
 	}
+	qtype := dns.StringToType[strings.ToUpper(rrType)]
 
-	q := dns.Question{toLowerFQDN(nameIDNA), dns.StringToType[strings.ToUpper(rrType)], dns.ClassINET}
-	rrs := exchange(q)
-	// rrs := resolver.Resolve(q)
+	// q := dns.Question{qname, qtype, dns.ClassINET}
+	// rrs := exchange(q)
+	rrc := resolver.Resolve(qname, qtype)
+	rrs := []dns.RR{}
+	for rr := range rrc {
+		rrs = append(rrs, rr)
+	}
 
 	logV("@{g}\n;; RESULTS:\n")
 	for _, rr := range rrs {

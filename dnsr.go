@@ -1,16 +1,18 @@
 package dnsr
 
 import (
+	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
-	"github.com/wsxiaoys/terminal/color"
 )
 
 type Resolver struct {
-	cache *lru.Cache
+	cache  *lru.Cache
+	client *dns.Client
 }
 
 func New(size int) *Resolver {
@@ -18,196 +20,172 @@ func New(size int) *Resolver {
 		size = 10000
 	}
 	cache, _ := lru.New(size)
-	r := &Resolver{cache}
+	r := &Resolver{
+		client: &dns.Client{},
+		cache:  cache,
+	}
 	r.cacheRoot()
 	return r
 }
 
+func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
+	c := make(chan dns.RR, 20)
+	go func() {
+		q := &dns.Question{qname, qtype, dns.ClassINET}
+		defer fmt.Printf(";; QUESTION:\n%s\n\n\n", q.String())
+		defer close(c)
+		qname = toLowerFQDN(qname)
+		if rrs := r.cacheGet(qname, qtype); rrs != nil {
+			inject(c, rrs...)
+			return
+		}
+		pname, ok := parent(qname)
+		if !ok {
+			return
+		}
+		for nrr := range r.Resolve(pname, dns.TypeNS) {
+			ns, ok := nrr.(*dns.NS)
+			if !ok {
+				continue
+			}
+		outer:
+			for arr := range r.Resolve(ns.Ns, dns.TypeA) {
+				a, ok := arr.(*dns.A)
+				if !ok {
+					continue
+				}
+				addr := a.A.String() + ":53"
+				qmsg := &dns.Msg{}
+				qmsg.SetQuestion(qname, qtype)
+				qmsg.MsgHdr.RecursionDesired = false
+				fmt.Printf("; Querying DNS server %s for %s\n", addr, qname)
+				client := dns.Client{}
+				rmsg, _, err := client.Exchange(qmsg, addr)
+				if err != nil {
+					fmt.Printf("; ERROR querying DNS server %s for %s: %s\n", addr, qname, err.Error())
+					continue // FIXME: handle errors better from flaky/failing NS servers
+				}
+				if rmsg.Rcode == dns.RcodeNameError {
+					r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
+				}
+				r.cacheSave(rmsg.Answer...)
+				r.cacheSave(rmsg.Ns...)
+				r.cacheSave(rmsg.Extra...)
+				if rrs := r.cacheGet(qname, qtype); rrs != nil {
+					inject(c, rrs...)
+					return
+				}
+				break outer
+			}
+		}
+		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
+			cn, ok := crr.(*dns.CNAME)
+			if !ok {
+				continue
+			}
+			for rr := range r.Resolve(cn.Target, qtype) {
+				r.cacheAdd(qname, qtype, rr)
+				c <- rr
+			}
+		}
+	}()
+	return c
+}
+
+func inject(c chan<- dns.RR, rrs ...dns.RR) {
+	for _, rr := range rrs {
+		c <- rr
+	}
+}
+
+func parent(name string) (string, bool) {
+	labels := dns.SplitDomainName(name)
+	if labels == nil {
+		return "", false
+	}
+	return toLowerFQDN(strings.Join(labels[1:], ".")), true
+}
+
+func toLowerFQDN(name string) string {
+	return dns.Fqdn(strings.ToLower(name))
+}
+
+type key struct {
+	qname string
+	qtype uint16
+}
+
+type entry struct {
+	m   sync.RWMutex
+	exp time.Time
+	rrs map[dns.RR]struct{}
+}
+
 func (r *Resolver) cacheRoot() {
 	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
-		if t.Error != nil {
-			continue
+		if t.Error == nil {
+			r.cacheSave(t.RR)
 		}
-		r.cacheAdd([]dns.RR{t.RR})
 	}
 }
 
-func (r *Resolver) Resolve(q dns.Question) []dns.RR {
-	q = dns.Question{toLowerFQDN(q.Name), q.Qtype, q.Qclass}
-
-	logV("@{};; QUESTION:\n%s\n\n\n", q.String())
-
-	// Check cache
-	rrs := r.cacheGet(q)
-	if rrs != nil {
-		logV("@{.};; CACHED:\n")
-		for _, rr := range rrs {
-			logV("@{.}%s\n", rr.String())
-		}
-		return rrs
-	}
-
-	// Find authorities (nameservers)
-	nsName := q.Name
-	if q.Qtype == dns.TypeNS {
-		var ok bool
-		// Query parent for NS queries
-		nsName, ok = parent(q.Name)
-		if !ok {
-			logV("ERROR: tried to get parent of .\n")
-			return nil
-		}
-	}
-	nsQ := dns.Question{nsName, dns.TypeNS, q.Qclass}
-	nses := r.Resolve(nsQ)
-	if nses == nil {
-		logV("@{r};; RESPONSE: no NS records found for %s\n", nsQ.Name)
+// cacheGet returns a randomly ordered slice of DNS records.
+func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
+	e := r.getEntry(qname, qtype)
+	if e == nil {
 		return nil
 	}
-
-	// Iterate through nameservers
-	for _, rr := range nses {
-		// Get authority’s A record
-		ns := rr.(*dns.NS)
-		ipQ := dns.Question{ns.Ns, dns.TypeA, q.Qclass}
-		ips := r.Resolve(ipQ)
-		if ips == nil {
-			logV("@{r};; RESPONSE: no A records found for %s\n", ipQ.Name)
-			continue
-		}
-
-		// Iterate through IP addresses
-		for _, rr := range ips {
-			qMsg := &dns.Msg{}
-			qMsg.SetQuestion(q.Name, q.Qtype)
-			qMsg.MsgHdr.RecursionDesired = false
-			ip := rr.(*dns.A)
-			addr := ip.A.String() + ":53"
-			client := &dns.Client{}
-			rMsg, _, err := client.Exchange(qMsg, addr)
-			if err != nil {
-				logV("@{r};; ERROR: %s\n", err.Error())
-				continue
-			}
-
-			// FIXME: cache NXDOMAIN responses responsibly
-			if rMsg.Rcode == dns.RcodeNameError {
-				r.cacheSet(q, []dns.RR{})
-			}
-
-			// Log responses
-			logV("@{c};; ANSWER:\n")
-			for _, rr := range rMsg.Answer {
-				logV("@{c}%s\n", rr.String())
-			}
-			logV("@{c}\n;; AUTHORITY:\n")
-			for _, rr := range rMsg.Ns {
-				logV("@{c}%s\n", rr.String())
-			}
-			logV("@{c}\n;; EXTRA:\n")
-			for _, rr := range rMsg.Extra {
-				logV("@{c}%s\n", rr.String())
-			}
-
-			// Cache responses
-			r.cacheAdd(rMsg.Answer)
-			r.cacheAdd(rMsg.Ns)
-			r.cacheAdd(rMsg.Extra)
-
-			// Check cache again
-			rrs := r.cacheGet(q)
-			if rrs != nil {
-				return rrs
-			}
-
-			break
-		}
-
-		break
+	e.m.RLock()
+	defer e.m.RUnlock()
+	rrs := make([]dns.RR, len(e.rrs))
+	for rr, _ := range e.rrs {
+		rrs = append(rrs, rr)
 	}
-
-	// Only check CNAMES for A and AAAA questions
-	if q.Qtype != dns.TypeA && q.Qtype != dns.TypeAAAA {
-		return nil
-	}
-
-	// Check cache for CNAMEs
-	cQ := dns.Question{q.Name, dns.TypeCNAME, q.Qclass}
-	rrs = r.cacheGet(cQ)
-	if rrs != nil {
-		// Iterate through CNAMEs
-		for _, rr := range rrs {
-
-			// Get CNAME target
-			cn := rr.(*dns.CNAME)
-			cQ2 := dns.Question{cn.Target, q.Qtype, q.Qclass}
-			cns := r.Resolve(cQ2)
-			if cns == nil {
-				logV("@{r};; RESPONSE: no records found for CNAME %s\n", cQ2.Name)
-				continue
-			}
-
-			return cns
-		}
-	}
-
-	return nil
+	return rrs
 }
 
-func (r *Resolver) cacheGet(q dns.Question) []dns.RR {
-	c, ok := r.cache.Get(q)
+// cacheSave saves 1 or more DNS records to the resolver cache.
+func (r *Resolver) cacheSave(rrs ...dns.RR) {
+	for _, rr := range rrs {
+		h := rr.Header()
+		r.cacheAdd(toLowerFQDN(h.Name), h.Rrtype, rr)
+	}
+}
+
+// cacheAdd adds 0 or more DNS records to the resolver cache for a specific
+// domain name and record type. This ensures the cache entry exists, even
+// if empty, for NXDOMAIN responses.
+func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
+	now := time.Now()
+	e := r.getEntry(qname, qtype)
+	if e == nil {
+		e = &entry{
+			exp: now.Add(24 * time.Hour),
+			rrs: make(map[dns.RR]struct{}, 0),
+		}
+		r.cache.Add(key{qname, qtype}, e)
+	}
+	e.m.Lock()
+	defer e.m.Unlock()
+	for _, rr := range rrs {
+		// fmt.Printf("%s\n", rr.String())
+		e.rrs[rr] = struct{}{}
+		exp := now.Add(time.Duration(rr.Header().Ttl) * time.Second)
+		if exp.Before(e.exp) {
+			e.exp = exp
+		}
+	}
+}
+
+func (r *Resolver) getEntry(qname string, qtype uint16) *entry {
+	c, ok := r.cache.Get(key{qname, qtype})
 	if !ok {
 		return nil
 	}
 	e := c.(*entry)
-	if e.isExpired() {
+	if time.Now().After(e.exp) {
 		return nil
 	}
-	return e.records
-}
-
-func (r *Resolver) cacheAdd(rrs []dns.RR) {
-	if len(rrs) == 0 {
-		return
-	}
-	h := rrs[0].Header()
-	q := dns.Question{toLowerFQDN(h.Name), h.Rrtype, h.Class}
-	r.cacheSet(q, rrs)
-}
-
-func (r *Resolver) cacheSet(q dns.Question, rrs []dns.RR) {
-	var ttl uint32 = 3600
-	if len(rrs) > 0 {
-		ttl = rrs[0].Header().Ttl
-		for _, rr := range rrs {
-			if rr.Header().Ttl < ttl {
-				ttl = rr.Header().Ttl
-			}
-		}
-	}
-	exp := time.Now().Add(time.Duration(ttl) * time.Second)
-	e := &entry{exp, rrs}
-	r.cache.Add(q, e)
-}
-
-type entry struct {
-	expiry  time.Time
-	records []dns.RR
-}
-
-func (e *entry) isExpired() bool {
-	if time.Now().After(e.expiry) {
-		return true
-	}
-	return false
-}
-
-
-var Verbose = false
-
-func logV(fmt string, args ...interface{}) {
-	// if !Verbose {
-	// 	return
-	// }
-	color.Printf(fmt, args...)
+	fmt.Printf("; CACHE HIT: %s\n", qname)
+	return e
 }
