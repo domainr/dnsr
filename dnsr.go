@@ -46,12 +46,12 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 				return
 			}
 		}
+	outer:
 		for nrr := range r.Resolve(pname, dns.TypeNS) {
 			ns, ok := nrr.(*dns.NS)
 			if !ok {
 				continue
 			}
-		outer:
 			for arr := range r.Resolve(ns.Ns, dns.TypeA) {
 				a, ok := arr.(*dns.A)
 				if !ok {
@@ -80,11 +80,18 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 				break outer
 			}
 		}
+
+		// Only check CNAMES for A and AAAA questions
+		if qtype != dns.TypeA && qtype != dns.TypeAAAA {
+			return
+		}
+
 		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
 			cn, ok := crr.(*dns.CNAME)
 			if !ok {
 				continue
 			}
+			fmt.Printf("; Resolving CNAME: %s\n", cn.Target)
 			for rr := range r.Resolve(cn.Target, qtype) {
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
