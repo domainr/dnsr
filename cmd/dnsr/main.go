@@ -68,6 +68,7 @@ func main() {
 }
 
 func query(name, rrType string) {
+	start := time.Now()
 	qname, err := idna.ToASCII(name)
 	if err != nil {
 		color.Fprintf(os.Stderr, "Invalid IDN domain name: %s\n", name)
@@ -99,6 +100,9 @@ func query(name, rrType string) {
 	} else {
 		color.Printf("@{r};; FALSE %s\n", name)
 	}
+	
+	dur := time.Since(start)
+	color.Printf("@{.w};; Elapsed: %s\n", dur.String())
 }
 
 func cacheGet(q dns.Question) []dns.RR {
