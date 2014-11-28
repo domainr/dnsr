@@ -67,7 +67,7 @@ func query(name, rrType string) {
 
 	// q := dns.Question{qname, qtype, dns.ClassINET}
 	// rrs := exchange(q)
-	rrc := resolver.Resolve(qname, qtype)
+	rrc := resolver.Resolve(qname, qtype, 0)
 	rrs := []dns.RR{}
 	for rr := range rrc {
 		if rr == nil {
