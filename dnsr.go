@@ -46,7 +46,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			for nrr := range r.Resolve(pname, dns.TypeNS) {
 				ns, ok := nrr.(*dns.NS)
 				if !ok {
-					fmt.Printf("; non-NS record!\n")
+					fmt.Printf("; non-NS record! %s\n", nrr.String())
 					continue
 				}
 				for arr := range r.Resolve(ns.Ns, dns.TypeA) {
@@ -70,16 +70,16 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 					r.cacheSave(rmsg.Answer...)
 					r.cacheSave(rmsg.Ns...)
 					r.cacheSave(rmsg.Extra...)
-					if qtype == dns.TypeNS {
-						for _, rr := range rmsg.Ns {
-							if rr.Header().Rrtype == dns.TypeNS {
-								// fmt.Printf("; Found NS server: %s -> %s\n", qname, rr.(*dns.NS).Ns)
-								r.cacheAdd(qname, qtype, rr)
-								// c <- rr
-								// return
-							}
-						}
-					}
+					// if qtype == dns.TypeNS {
+					// 	for _, rr := range rmsg.Ns {
+					// 		if rr.Header().Rrtype == dns.TypeNS {
+					// 			// fmt.Printf("; Found NS server: %s -> %s\n", qname, rr.(*dns.NS).Ns)
+					// 			r.cacheAdd(qname, qtype, rr)
+					// 			// c <- rr
+					// 			// return
+					// 		}
+					// 	}
+					// }
 					break outer
 				}
 			}
@@ -91,27 +91,17 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 		}
 		fmt.Printf(";; FAILED: %s %s\n", qname, dns.TypeToString[qtype])
 
-		// Only check CNAMES for A and AAAA questions
-		// if qtype != dns.TypeA && qtype != dns.TypeAAAA {
-		// 	return
-		// }
-		if qtype == dns.TypeCNAME {
-			return
-		}
-
 		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
 			cn, ok := crr.(*dns.CNAME)
 			if !ok {
 				continue
 			}
 			r.cacheAdd(qname, qtype, crr)
-			c <- crr
 			for rr := range r.Resolve(cn.Target, qtype) {
 				fmt.Printf("%s\n", rr.String())
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
-			return
 		}
 	}()
 	return c
