@@ -58,7 +58,6 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 				qmsg := &dns.Msg{}
 				qmsg.SetQuestion(qname, qtype)
 				qmsg.MsgHdr.RecursionDesired = false
-				fmt.Printf("; Querying DNS server %s for %s\n", addr, qname)
 				rmsg, _, err := r.client.Exchange(qmsg, addr)
 				if err != nil {
 					fmt.Printf("; ERROR querying DNS server %s for %s: %s\n", addr, qname, err.Error())
