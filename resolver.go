@@ -2,6 +2,8 @@ package dnsr
 
 import (
 	"strings"
+	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
@@ -30,7 +32,9 @@ func (r *Resolver) Resolve(qname string, qtype dns.Type) <-chan dns.RR {
 	go func() {
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
-			inject(c, rrs)
+			for _, rr := range rrs {
+				c <- rr
+			}
 			return
 		}
 		pname, ok := parent(qname)
@@ -90,21 +94,67 @@ func (r *Resolver) cacheRoot() {
 	}
 }
 
+// cacheGet returns a randomly ordered slice of DNS records
 func (r *Resolver) cacheGet(qname string, qtype dns.Type) []dns.RR {
-	// FIXME: implement
-	return nil
+	e := r.getEntry(qname, qtype)
+	if e == nil {
+		return nil
+	}
+	e.m.RLock()
+	defer e.m.RUnlock()
+	rrs := make([]dns.RR, len(r.rrs))
+	for rr, _ := range r.rrs {
+		rrs = append(rrs, rr)
+	}
 }
 
 func (r *Resolver) cacheSave(rrs ...dns.RR) {
-	// FIXME: implement
+	for _, rr := range rrs {
+		h := rr.Header()
+		r.cacheAdd(h.Name, h.Rrtype, rr)
+	}
 }
 
 func (r *Resolver) cacheAdd(qname string, qtype dns.Type, rrs ...dns.RR) {
-	// FIXME: implement
+	now := time.Now()
+	e := r.getEntry(qname, qtype)
+	if e == nil {
+		e = &entry{
+			exp: now.Add(24 * time.Hour),
+			rrs: make([]dns.RR, 0),
+		}
+		r.cache.Add(key{qname, qtype}, e)
+	}
+	e.m.Lock()
+	defer e.m.Unlock()
+	for _, rr := range rrs {
+		e.rrs[rr] = struct{}{}
+		exp := now.Add(rr.Header().Ttl * time.Second)
+		if exp.Before(e.exp) {
+			e.exp = exp
+		}
+	}
 }
 
-func inject(c chan<- dns.RR, rrs []dns.RR) {
-	for _, rr := range rrs {
-		c <- rr
+func (r *Resolver) getEntry(qname string, qtype dns.Type) *entry {
+	c, ok := r.cache.Get(key{qname, qtype})
+	if !ok {
+		return nil
 	}
+	e := c.(*entry)
+	if time.Now().After(e.exp) {
+		return nil
+	}
+	return e
+}
+
+type key struct {
+	qname string
+	qtype dns.Type
+}
+
+type entry struct {
+	m   sync.RWMutex
+	exp time.Time
+	rrs map[dns.RR]struct{}
 }
