@@ -174,10 +174,21 @@ func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
 	}
 	e.m.Lock()
 	defer e.m.Unlock()
+	if qname == "domainr.com." {
+		fmt.Printf("; len(entry.rrs) = %d\n", len(e.rrs))
+	}
 	for _, rr := range rrs {
 		h := rr.Header()
 		if h.Rrtype != qtype {
 			continue
+		}
+		_, ok := e.rrs[rr]
+		if ok {
+			fmt.Printf("; DUPLICATE KEY! %s\n", qname)
+			continue
+		}
+		if rr != dns.Copy(rr) {
+			fmt.Printf("; rr != rr.Copy() %s\n", qname)
 		}
 		e.rrs[rr] = struct{}{}
 		exp := now.Add(time.Duration(h.Ttl) * time.Second)
