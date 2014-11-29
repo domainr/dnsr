@@ -1,7 +1,6 @@
 package dnsr
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -46,13 +45,11 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			for nrr := range r.Resolve(pname, dns.TypeNS) {
 				ns, ok := nrr.(*dns.NS)
 				if !ok {
-					fmt.Printf("; non-NS record! %s\n", nrr.String())
 					continue
 				}
 				for arr := range r.Resolve(ns.Ns, dns.TypeA) {
 					a, ok := arr.(*dns.A)
 					if !ok {
-						fmt.Printf("; non-A record!\n")
 						continue
 					}
 					addr := a.A.String() + ":53"
@@ -80,7 +77,6 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			inject(c, rrs...)
 			return
 		}
-		// fmt.Printf(";; FAILED: %s %s\n", qname, dns.TypeToString[qtype])
 
 		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
 			cn, ok := crr.(*dns.CNAME)
@@ -89,7 +85,6 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			}
 			r.cacheAdd(qname, qtype, crr)
 			for rr := range r.Resolve(cn.Target, qtype) {
-				fmt.Printf("%s\n", rr.String())
 				r.cacheAdd(qname, qtype, rr)
 				c <- rr
 			}
@@ -124,7 +119,7 @@ type key struct {
 type entry struct {
 	m   sync.RWMutex
 	exp time.Time
-	rrs map[dns.RR]struct{}
+	rrs map[string]dns.RR
 }
 
 func (r *Resolver) cacheRoot() {
@@ -144,7 +139,7 @@ func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
 	e.m.RLock()
 	defer e.m.RUnlock()
 	rrs := make([]dns.RR, 0, len(e.rrs))
-	for rr, _ := range e.rrs {
+	for _, rr := range e.rrs {
 		rrs = append(rrs, rr)
 	}
 	return rrs
@@ -168,29 +163,18 @@ func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
 	if e == nil {
 		e = &entry{
 			exp: now.Add(24 * time.Hour),
-			rrs: make(map[dns.RR]struct{}, 0),
+			rrs: make(map[string]dns.RR, 0),
 		}
 		r.cache.Add(key{qname, qtype}, e)
 	}
 	e.m.Lock()
 	defer e.m.Unlock()
-	if qname == "domainr.com." {
-		fmt.Printf("; len(entry.rrs) = %d\n", len(e.rrs))
-	}
 	for _, rr := range rrs {
 		h := rr.Header()
 		if h.Rrtype != qtype {
 			continue
 		}
-		_, ok := e.rrs[rr]
-		if ok {
-			fmt.Printf("; DUPLICATE KEY! %s\n", qname)
-			continue
-		}
-		if rr != dns.Copy(rr) {
-			fmt.Printf("; rr != rr.Copy() %s\n", qname)
-		}
-		e.rrs[rr] = struct{}{}
+		e.rrs[rr.String()] = rr
 		exp := now.Add(time.Duration(h.Ttl) * time.Second)
 		if exp.Before(e.exp) {
 			e.exp = exp
