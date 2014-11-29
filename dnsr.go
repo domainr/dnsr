@@ -15,7 +15,7 @@ type Resolver struct {
 }
 
 func New(size int) *Resolver {
-	if size < 0 {
+	if size <= 0 {
 		size = 10000
 	}
 	cache, _ := lru.New(size)
