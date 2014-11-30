@@ -54,7 +54,7 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 					}
 					addr := a.A.String() + ":53"
 					qmsg := &dns.Msg{}
-					qmsg.SetQuestion(qname, qtype)
+					qmsg.SetQuestion(qname, dns.TypeA)
 					qmsg.MsgHdr.RecursionDesired = false
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
 					rmsg, _, err := r.client.Exchange(qmsg, addr)
