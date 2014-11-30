@@ -69,7 +69,7 @@ func (r *Resolver) Resolve(qname string) <-chan *RR {
 
 		if rrs := r.cacheGet(qname); rrs != nil {
 			inject(c, rrs...)
-			//return
+			return
 		}
 
 		// FIXME: will it ever make it here?
@@ -165,6 +165,10 @@ func (r *Resolver) cacheAdd(qname string, rr *RR) {
 	}
 	defer e.m.Unlock()
 	if rr != nil {
+		// rr2 := RR{rr.Name, rr.Type, rr.Value}
+		// if rr2 == *rr {
+		// 	fmt.Printf("Yeah! Equal structs! %s\n", rr.String())
+		// }
 		e.rrs[*rr] = struct{}{}
 	}
 }
@@ -179,7 +183,8 @@ func (r *Resolver) cacheGet(qname string) []*RR {
 	defer e.m.RUnlock()
 	rrs := make([]*RR, 0, len(e.rrs))
 	for rr, _ := range e.rrs {
-		rrs = append(rrs, &rr)
+		// fmt.Printf("%s\n", rr.String())
+		rrs = append(rrs, &RR{rr.Name, rr.Type, rr.Value})
 	}
 	return rrs
 }

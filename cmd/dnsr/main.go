@@ -38,39 +38,35 @@ func logV(fmt string, args ...interface{}) {
 
 func main() {
 	flag.Usage = func() {
-		color.Fprintf(os.Stderr, "Usage: %s [arguments] <name> [type]\n\nAvailable arguments:\n", os.Args[0])
+		color.Fprintf(os.Stderr, "Usage: %s [arguments] <name>\n\nAvailable arguments:\n", os.Args[0])
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 	flag.Parse()
-	rrType := "A"
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
-	} else if len(args) > 1 {
-		rrType, args = args[len(args)-1], args[:len(args)-1]
 	}
 	var wg sync.WaitGroup
 	start := time.Now()
 	for _, name := range args {
 		wg.Add(1)
-		go func(name string, rrType string) {
-			query(name, rrType)
+		go func(name string) {
+			query(name)
 			wg.Done()
-		}(name, rrType)
+		}(name)
 	}
 	wg.Wait()
 	logV("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
 }
 
-func query(name, rrType string) {
+func query(name string) {
 	start := time.Now()
 	qname, err := idna.ToASCII(name)
 	if err != nil {
 		color.Fprintf(os.Stderr, "Invalid IDN domain name: %s\n", name)
 		os.Exit(1)
 	}
-	// qtype := dns.StringToType[strings.ToUpper(rrType)]
 
 	// q := dns.Question{qname, qtype, dns.ClassINET}
 	// rrs := exchange(q)
