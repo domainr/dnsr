@@ -8,6 +8,7 @@ import (
 
 	"code.google.com/p/go.net/idna"
 	"github.com/domainr/dnsr"
+	"github.com/miekg/dns"
 	"github.com/wsxiaoys/terminal/color"
 )
 
@@ -38,29 +39,32 @@ func logV(fmt string, args ...interface{}) {
 
 func main() {
 	flag.Usage = func() {
-		color.Fprintf(os.Stderr, "Usage: %s [arguments] <name>\n\nAvailable arguments:\n", os.Args[0])
+		color.Fprintf(os.Stderr, "Usage: %s [arguments] <name> [type]\n\nAvailable arguments:\n", os.Args[0])
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 	flag.Parse()
+	qtype := ""
 	args := flag.Args()
 	if len(args) == 0 {
 		flag.Usage()
+	} else if _, isType := dns.StringToType[args[len(args)-1]]; len(args) > 1 && isType {
+		qtype, args = args[len(args)-1], args[:len(args)-1]
 	}
 	var wg sync.WaitGroup
 	start := time.Now()
 	for _, name := range args {
 		wg.Add(1)
-		go func(name string) {
-			query(name)
+		go func(name string, qtype string) {
+			query(name, qtype)
 			wg.Done()
-		}(name)
+		}(name, qtype)
 	}
 	wg.Wait()
 	logV("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
 }
 
-func query(name string) {
+func query(name, qtype string) {
 	start := time.Now()
 	qname, err := idna.ToASCII(name)
 	if err != nil {
@@ -68,9 +72,7 @@ func query(name string) {
 		os.Exit(1)
 	}
 
-	// q := dns.Question{qname, qtype, dns.ClassINET}
-	// rrs := exchange(q)
-	rrc := resolver.Resolve(qname)
+	rrc := resolver.Resolve(qname, qtype)
 	rrs := []*dnsr.RR{}
 	for rr := range rrc {
 		if rr == nil {
@@ -89,11 +91,11 @@ func query(name string) {
 	}
 
 	if rrs == nil {
-		color.Printf("@{y};; NIL\t%s\n", name)
+		color.Printf("@{y};; NIL\t%s\t%s\n", name, qtype)
 	} else if len(rrs) > 0 {
-		color.Printf("@{g};; TRUE\t%s\n", name)
+		color.Printf("@{g};; TRUE\t%s\t%s\n", name, qtype)
 	} else {
-		color.Printf("@{r};; FALSE\t%s\n", name)
+		color.Printf("@{r};; FALSE\t%s\t%s\n", name, qtype)
 	}
 
 	logV("@{.w};; Elapsed: %s\n", time.Since(start).String())

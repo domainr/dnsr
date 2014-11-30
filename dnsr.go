@@ -1,6 +1,7 @@
 package dnsr
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -26,35 +27,46 @@ func New(size int) *Resolver {
 	return r
 }
 
-func (r *Resolver) Resolve(qname string) <-chan *RR {
+func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 	c := make(chan *RR, 20)
 	go func() {
 		qname = toLowerFQDN(qname)
 		defer close(c)
-		if rrs := r.cacheGet(qname); rrs != nil {
+		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
 			return
 		}
-		pname, ok := parent(qname)
+		pname, ok := qname, true
+		if qtype == "NS" {
+			pname, ok = parent(qname)
+			if !ok {
+				return
+			}
+		}
 	outer:
 		for ; ok; pname, ok = parent(pname) {
-			for nrr := range r.Resolve(pname) {
+			for nrr := range r.Resolve(pname, "NS") {
 				if nrr.Type != "NS" {
 					continue
 				}
-				for arr := range r.Resolve(nrr.Value) {
+				for arr := range r.Resolve(nrr.Value, "A") {
 					if arr.Type != "A" { // FIXME: support AAAA records?
 						continue
 					}
 					addr := arr.Value + ":53"
+					dtype, ok := dns.StringToType[qtype]
+					if !ok {
+						dtype = dns.TypeA
+					}
 					qmsg := &dns.Msg{}
-					qmsg.SetQuestion(qname, dns.TypeA)
+					qmsg.SetQuestion(qname, dtype)
 					qmsg.MsgHdr.RecursionDesired = false
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
-					rmsg, _, err := r.client.Exchange(qmsg, addr)
+					rmsg, dur, err := r.client.Exchange(qmsg, addr)
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
+					fmt.Printf("Exchange in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
 					r.saveDNSRR(rmsg.Answer...)
 					r.saveDNSRR(rmsg.Ns...)
 					r.saveDNSRR(rmsg.Extra...)
@@ -67,17 +79,32 @@ func (r *Resolver) Resolve(qname string) <-chan *RR {
 			}
 		}
 
-		if rrs := r.cacheGet(qname); rrs != nil {
+		if rrs := r.cacheGet(qname, ""); rrs != nil {
 			inject(c, rrs...)
-			return
+			//return
+			// for _, rr := range rrs {
+			// 	c <- rr
+			// 	if qtype == "CNAME" || rr.Type != "CNAME" {
+			// 		continue
+			// 	}
+			// 	fmt.Printf("Checking CNAME: %s\n", rr.String())
+			// 	for qrr := range r.Resolve(rr.Value, qtype) {
+			// 		r.cacheAdd(qname, qrr)
+			// 		c <- qrr
+			// 		break
+			// 	}
+			// }
+			// return
 		}
 
+
+		// r.cacheAdd(qname, nil)
+		// fmt.Printf("Checking for CNAMES! %s\n", qname)
+
 		// FIXME: will it ever make it here?
-		for _, crr := range r.cacheGet(qname) {
-			if crr.Type != "CNAME" {
-				continue
-			}
-			for rr := range r.Resolve(crr.Value) {
+		for _, crr := range r.cacheGet(qname, "CNAME") {
+			fmt.Printf("Checking CNAME: %s\n", crr.String())
+			for rr := range r.Resolve(crr.Value, qtype) {
 				r.cacheAdd(qname, rr)
 				c <- rr
 			}
@@ -106,6 +133,10 @@ func convertRR(drr dns.RR) *RR {
 		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.A.String()}
 	case *dns.AAAA:
 		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.AAAA.String()}
+	case *dns.TXT:
+		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], strings.Join(t.Txt, "\t")}
+	default:
+		// fmt.Printf("%s\n", drr.String())
 	}
 	return nil
 }
@@ -126,6 +157,11 @@ func parent(name string) (string, bool) {
 
 func toLowerFQDN(name string) string {
 	return dns.Fqdn(strings.ToLower(name))
+}
+
+type key struct {
+	Name string
+	Type string
 }
 
 type entry struct {
@@ -165,27 +201,31 @@ func (r *Resolver) cacheAdd(qname string, rr *RR) {
 	}
 	defer e.m.Unlock()
 	if rr != nil {
-		// rr2 := RR{rr.Name, rr.Type, rr.Value}
-		// if rr2 == *rr {
-		// 	fmt.Printf("Yeah! Equal structs! %s\n", rr.String())
-		// }
 		e.rrs[*rr] = struct{}{}
 	}
 }
 
 // cacheGet returns a randomly ordered slice of DNS records.
-func (r *Resolver) cacheGet(qname string) []*RR {
+func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
 	e := r.getEntry(qname)
 	if e == nil {
 		return nil
 	}
 	e.m.RLock()
 	defer e.m.RUnlock()
+	if len(e.rrs) == 0 {
+		return []*RR{}
+	}
 	rrs := make([]*RR, 0, len(e.rrs))
 	for rr, _ := range e.rrs {
 		// fmt.Printf("%s\n", rr.String())
-		rrs = append(rrs, &RR{rr.Name, rr.Type, rr.Value})
+		if qtype == "" || rr.Type == qtype {
+			rrs = append(rrs, &RR{rr.Name, rr.Type, rr.Value})
+		}
 	}
+	// if len(rrs) == 0 {
+	// 	return nil
+	// }
 	return rrs
 }
 
