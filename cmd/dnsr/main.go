@@ -3,13 +3,11 @@ package main
 import (
 	"flag"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"code.google.com/p/go.net/idna"
 	"github.com/domainr/dnsr"
-	"github.com/miekg/dns"
 	"github.com/wsxiaoys/terminal/color"
 )
 
@@ -72,12 +70,12 @@ func query(name, rrType string) {
 		color.Fprintf(os.Stderr, "Invalid IDN domain name: %s\n", name)
 		os.Exit(1)
 	}
-	qtype := dns.StringToType[strings.ToUpper(rrType)]
+	// qtype := dns.StringToType[strings.ToUpper(rrType)]
 
 	// q := dns.Question{qname, qtype, dns.ClassINET}
 	// rrs := exchange(q)
-	rrc := resolver.Resolve(qname, qtype)
-	rrs := []dns.RR{}
+	rrc := resolver.Resolve(qname)
+	rrs := []*dnsr.RR{}
 	for rr := range rrc {
 		if rr == nil {
 			logV("@{r}\n;; NIL RR!\n")
@@ -95,11 +93,11 @@ func query(name, rrType string) {
 	}
 
 	if rrs == nil {
-		color.Printf("@{y};; NIL   %s\n", name)
+		color.Printf("@{y};; NIL\t%s\n", name)
 	} else if len(rrs) > 0 {
-		color.Printf("@{g};; TRUE  %s\n", name)
+		color.Printf("@{g};; TRUE\t%s\n", name)
 	} else {
-		color.Printf("@{r};; FALSE %s\n", name)
+		color.Printf("@{r};; FALSE\t%s\n", name)
 	}
 
 	logV("@{.w};; Elapsed: %s\n", time.Since(start).String())

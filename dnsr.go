@@ -3,7 +3,6 @@ package dnsr
 import (
 	"strings"
 	"sync"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
@@ -27,32 +26,27 @@ func New(size int) *Resolver {
 	return r
 }
 
-func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
-	c := make(chan dns.RR, 20)
+func (r *Resolver) Resolve(qname string) <-chan *RR {
+	c := make(chan *RR, 20)
 	go func() {
 		qname = toLowerFQDN(qname)
 		defer close(c)
-		if rrs := r.cacheGet(qname, qtype); rrs != nil {
+		if rrs := r.cacheGet(qname); rrs != nil {
 			inject(c, rrs...)
 			return
 		}
-		pname, ok := qname, true
-		if qtype == dns.TypeNS {
-			pname, ok = parent(qname)
-		}
+		pname, ok := parent(qname)
 	outer:
 		for ; ok; pname, ok = parent(pname) {
-			for nrr := range r.Resolve(pname, dns.TypeNS) {
-				ns, ok := nrr.(*dns.NS)
-				if !ok {
+			for nrr := range r.Resolve(pname) {
+				if nrr.Type != "NS" {
 					continue
 				}
-				for arr := range r.Resolve(ns.Ns, dns.TypeA) {
-					a, ok := arr.(*dns.A)
-					if !ok {
+				for arr := range r.Resolve(nrr.Value) {
+					if arr.Type != "A" { // FIXME: support AAAA records?
 						continue
 					}
-					addr := a.A.String() + ":53"
+					addr := arr.Value + ":53"
 					qmsg := &dns.Msg{}
 					qmsg.SetQuestion(qname, dns.TypeA)
 					qmsg.MsgHdr.RecursionDesired = false
@@ -61,11 +55,11 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
-					r.cacheSave(rmsg.Answer...)
-					r.cacheSave(rmsg.Ns...)
-					r.cacheSave(rmsg.Extra...)
+					r.saveDNSRR(rmsg.Answer...)
+					r.saveDNSRR(rmsg.Ns...)
+					r.saveDNSRR(rmsg.Extra...)
 					if rmsg.Rcode == dns.RcodeNameError {
-						r.cacheAdd(qname, qtype) // FIXME: cache NXDOMAIN responses responsibly
+						r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
 						return
 					}
 					break outer
@@ -73,19 +67,18 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 			}
 		}
 
-		if rrs := r.cacheGet(qname, qtype); rrs != nil {
+		if rrs := r.cacheGet(qname); rrs != nil {
 			inject(c, rrs...)
-			return
+			//return
 		}
 
-		for _, crr := range r.cacheGet(qname, dns.TypeCNAME) {
-			cn, ok := crr.(*dns.CNAME)
-			if !ok {
+		// FIXME: will it ever make it here?
+		for _, crr := range r.cacheGet(qname) {
+			if crr.Type != "CNAME" {
 				continue
 			}
-			r.cacheAdd(qname, qtype, crr)
-			for rr := range r.Resolve(cn.Target, qtype) {
-				r.cacheAdd(qname, qtype, rr)
+			for rr := range r.Resolve(crr.Value) {
+				r.cacheAdd(qname, rr)
 				c <- rr
 			}
 		}
@@ -93,7 +86,31 @@ func (r *Resolver) Resolve(qname string, qtype uint16) <-chan dns.RR {
 	return c
 }
 
-func inject(c chan<- dns.RR, rrs ...dns.RR) {
+type RR struct {
+	Name  string
+	Type  string
+	Value string
+}
+
+func (rr *RR) String() string {
+	return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
+}
+
+func convertRR(drr dns.RR) *RR {
+	switch t := drr.(type) {
+	case *dns.NS:
+		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.Ns}
+	case *dns.CNAME:
+		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.Target}
+	case *dns.A:
+		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.A.String()}
+	case *dns.AAAA:
+		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.AAAA.String()}
+	}
+	return nil
+}
+
+func inject(c chan<- *RR, rrs ...*RR) {
 	for _, rr := range rrs {
 		c <- rr
 	}
@@ -111,84 +128,70 @@ func toLowerFQDN(name string) string {
 	return dns.Fqdn(strings.ToLower(name))
 }
 
-type key struct {
-	qname string
-	qtype uint16
-}
-
 type entry struct {
 	m   sync.RWMutex
-	exp time.Time
-	rrs map[string]dns.RR
+	rrs map[RR]struct{}
 }
 
 func (r *Resolver) cacheRoot() {
 	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
 		if t.Error == nil {
-			r.cacheSave(t.RR)
+			r.saveDNSRR(t.RR)
 		}
 	}
 }
 
-// cacheGet returns a randomly ordered slice of DNS records.
-func (r *Resolver) cacheGet(qname string, qtype uint16) []dns.RR {
-	e := r.getEntry(qname, qtype)
-	if e == nil {
-		return nil
-	}
-	e.m.RLock()
-	defer e.m.RUnlock()
-	rrs := make([]dns.RR, 0, len(e.rrs))
-	for _, rr := range e.rrs {
-		rrs = append(rrs, rr)
-	}
-	return rrs
-}
-
-// cacheSave saves 1 or more DNS records to the resolver cache.
-func (r *Resolver) cacheSave(rrs ...dns.RR) {
-	for _, rr := range rrs {
-		h := rr.Header()
-		r.cacheAdd(h.Name, h.Rrtype, rr)
+// saveDNSRR saves 1 or more DNS records to the resolver cache.
+func (r *Resolver) saveDNSRR(drrs ...dns.RR) {
+	for _, drr := range drrs {
+		if rr := convertRR(drr); rr != nil {
+			r.cacheAdd(rr.Name, rr)
+		}
 	}
 }
 
 // cacheAdd adds 0 or more DNS records to the resolver cache for a specific
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
-func (r *Resolver) cacheAdd(qname string, qtype uint16, rrs ...dns.RR) {
+func (r *Resolver) cacheAdd(qname string, rr *RR) {
 	qname = toLowerFQDN(qname)
-	now := time.Now()
-	e := r.getEntry(qname, qtype)
+	e := r.getEntry(qname)
 	if e == nil {
-		e = &entry{
-			exp: now.Add(24 * time.Hour),
-			rrs: make(map[string]dns.RR, 0),
-		}
-		r.cache.Add(key{qname, qtype}, e)
+		e = &entry{rrs: make(map[RR]struct{}, 0)}
+		e.m.Lock()
+		r.cache.Add(qname, e)
+	} else {
+		e.m.Lock()
 	}
-	e.m.Lock()
 	defer e.m.Unlock()
-	for _, rr := range rrs {
-		h := rr.Header()
-		if h.Rrtype != qtype {
-			continue
-		}
-		e.rrs[rr.String()] = rr
-		exp := now.Add(time.Duration(h.Ttl) * time.Second)
-		if exp.Before(e.exp) {
-			e.exp = exp
-		}
+	if rr != nil {
+		e.rrs[*rr] = struct{}{}
 	}
 }
 
-func (r *Resolver) getEntry(qname string, qtype uint16) *entry {
-	c, ok := r.cache.Get(key{qname, qtype})
+// cacheGet returns a randomly ordered slice of DNS records.
+func (r *Resolver) cacheGet(qname string) []*RR {
+	e := r.getEntry(qname)
+	if e == nil {
+		return nil
+	}
+	e.m.RLock()
+	defer e.m.RUnlock()
+	rrs := make([]*RR, 0, len(e.rrs))
+	for rr, _ := range e.rrs {
+		rrs = append(rrs, &rr)
+	}
+	return rrs
+}
+
+// getEntry returns a single cache entry or nil if an entry does not exist in the cache.
+func (r *Resolver) getEntry(qname string) *entry {
+	c, ok := r.cache.Get(qname)
 	if !ok {
 		return nil
 	}
-	e := c.(*entry)
-	if time.Now().After(e.exp) {
+	e, ok := c.(*entry)
+	if !ok {
 		return nil
 	}
 	return e
