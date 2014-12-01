@@ -47,13 +47,9 @@ func New(size int) *Resolver {
 func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 	c := make(chan *RR, 20)
 	go func() {
-		// fmt.Printf("Resolve: %s %s\n", qname, qtype)
 		qname = toLowerFQDN(qname)
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
-			// if len(rrs) > 0 {
-			// 	fmt.Printf("Cache hit: %s %s: %s\n", qname, qtype, rrs[0].String())
-			// }
 			inject(c, rrs...)
 			return
 		}
@@ -72,7 +68,6 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 				}
 				for arr := range r.Resolve(nrr.Value, "A") {
 					if arr.Type != "A" { // FIXME: support AAAA records?
-						// fmt.Printf("Non-A record: %s\n", arr.String())
 						continue
 					}
 					addr := arr.Value + ":53"
@@ -86,7 +81,6 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
 					rmsg, _, err := r.client.Exchange(qmsg, addr)
 					if err != nil {
-						// fmt.Printf("Error talking to DNS server: %s\n", err.Error())
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
 					// fmt.Printf("Exchange in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
