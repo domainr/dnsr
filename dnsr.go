@@ -99,13 +99,16 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 		if rrs := r.cacheGet(qname, ""); rrs != nil {
 			inject(c, rrs...)
 			//return
-		}
 
-		for _, crr := range r.cacheGet(qname, "CNAME") {
-			// fmt.Printf("Checking CNAME: %s\n", crr.String())
-			for rr := range r.Resolve(crr.Value, qtype) {
-				r.cacheAdd(qname, rr)
-				c <- rr
+			for _, crr := range rrs {
+				if crr.Type != "CNAME" {
+					continue
+				}
+				// fmt.Printf("Checking CNAME: %s\n", crr.String())
+				for rr := range r.Resolve(crr.Value, qtype) {
+					r.cacheAdd(qname, rr)
+					c <- rr
+				}
 			}
 		}
 	}()
@@ -218,6 +221,9 @@ func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
 		if qtype == "" || rr.Type == qtype {
 			rrs = append(rrs, &RR{rr.Name, rr.Type, rr.Value})
 		}
+	}
+	if len(rrs) == 0 && (qtype != "" && qtype != "NS") {
+		return nil
 	}
 	return rrs
 }
