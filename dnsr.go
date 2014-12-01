@@ -8,6 +8,8 @@ import (
 	"github.com/miekg/dns"
 )
 
+//go:generate sh generate.sh
+
 var Root *Resolver
 
 func init() {
