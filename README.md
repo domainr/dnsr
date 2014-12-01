@@ -1,49 +1,35 @@
-# dnsr
+# dnsr [![GoDoc](https://godoc.org/github.com/domainr/dnsr?status.png)](https://godoc.org/github.com/domainr/dnsr) ![Project Status](http://img.shields.io/badge/status-development-red.svg)
+
+`go get github.com/domainr/dnsr`
 
 Iterative DNS resolver for Go.
 
-## Design
+The `Resolve` method on `dnsr.Resolver` queries DNS for given name and type (`A`, `NS`, `CNAME`, etc.). The resolver caches responses for queries, and liberally (aggressively?) returns DNS records for a given name, not waiting for slow or broken name servers. It runs each query in a goroutine, and returns results in a channel of `*dnsr.RR`. The implementation guarantees it will close the output channel, so consumers can safely `range` across the results.
 
-Resolver that emits a slice of results for a given name and type (A, NS, CNAME, etc.). The resolver caches responses for queries.
+This code leans heavily on [Miek Gieben’s](https://github.com/miekg) excellent [dns library for Go](https://github.com/miekg/dns).
 
-### Layers
-
-- Cache
-- Resolve addresses for names (A, AAAA)
-- Resolve CNAMEs
-- Find NS records (authority) for names
-- Interrogate another name server (this layer will cache)
-
-### Where to cache?
-
-- Cache at outer level?
-- Cache immediately around DNS exchange?
-- Cache at every layer?
-
-
-## Notes
-
-Each resolver (core, cache, authority) implements the `Resolver` interface:
+## Example
 
 ```go
-type Resolver interface {
-	Resolve(qname string, qtype dns.Type) (*dns.Msg, error)
+package main
+
+import (
+  "fmt"
+  "github.com/domainr/dnsr"
+)
+
+func main() {
+  r := dnsr.New(10000)
+  for rr := range r.Resolve("google.com", "TXT") {
+    fmt.Println(rr.String())
+  }
 }
 ```
 
-The `coreResolver` first checks its cache, then the authority for a given name:
+## Development
 
-```go
-type coreResolver struct {
-  cache Resolver
-}
-```
+Run `go generate` in Go 1.4+ to refresh the [root zone hint file](http://www.internic.net/domain/named.root). Pull requests welcome.
 
-An `authorityResolver` resolves via the authority (NS) for a given name:
+## Copyright
 
-```go
-type authorityResolver struct {
-  name string
-  cache Resolver
-}
-```
+© 2014 nb.io, LLC
