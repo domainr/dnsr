@@ -21,11 +21,13 @@ func init() {
 	}
 }
 
+// Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
 	cache  *lru.Cache
 	client *dns.Client
 }
 
+// New initializes a Resolver with the specified cache size. Cache size defaults to 10,000 if size <= 0.
 func New(size int) *Resolver {
 	if size <= 0 {
 		size = 10000
@@ -38,6 +40,10 @@ func New(size int) *Resolver {
 	return r
 }
 
+// Resolve finds DNS records of type qtype for the domain qname. It returns a channel of *RR.
+// The implementation guarantees that the output channel will close, so it is safe to range over.
+// For nonexistent domains (where a DNS server will return NXDOMAIN), it will simply close the output channel.
+// Specify an empty string in qtype to receive any DNS records found (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 	c := make(chan *RR, 20)
 	go func() {
@@ -106,12 +112,14 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 	return c
 }
 
+// RR represents a DNS resource record.
 type RR struct {
 	Name  string
 	Type  string
 	Value string
 }
 
+// String returns a string representation of an RR in zone-file format.
 func (rr *RR) String() string {
 	return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
 }
