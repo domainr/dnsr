@@ -1,13 +1,23 @@
 package dnsr
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
 )
+
+var Root *Resolver
+
+func init() {
+	Root = New(strings.Count(root, "\n"))
+	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
+		if t.Error == nil {
+			Root.saveDNSRR(t.RR)
+		}
+	}
+}
 
 type Resolver struct {
 	cache  *lru.Cache
@@ -23,7 +33,6 @@ func New(size int) *Resolver {
 		client: &dns.Client{},
 		cache:  cache,
 	}
-	r.cacheRoot()
 	return r
 }
 
@@ -62,11 +71,11 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 					qmsg.SetQuestion(qname, dtype)
 					qmsg.MsgHdr.RecursionDesired = false
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
-					rmsg, dur, err := r.client.Exchange(qmsg, addr)
+					rmsg, _, err := r.client.Exchange(qmsg, addr)
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
-					fmt.Printf("Exchange in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
+					// fmt.Printf("Exchange in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
 					r.saveDNSRR(rmsg.Answer...)
 					r.saveDNSRR(rmsg.Ns...)
 					r.saveDNSRR(rmsg.Extra...)
@@ -82,28 +91,10 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 		if rrs := r.cacheGet(qname, ""); rrs != nil {
 			inject(c, rrs...)
 			//return
-			// for _, rr := range rrs {
-			// 	c <- rr
-			// 	if qtype == "CNAME" || rr.Type != "CNAME" {
-			// 		continue
-			// 	}
-			// 	fmt.Printf("Checking CNAME: %s\n", rr.String())
-			// 	for qrr := range r.Resolve(rr.Value, qtype) {
-			// 		r.cacheAdd(qname, qrr)
-			// 		c <- qrr
-			// 		break
-			// 	}
-			// }
-			// return
 		}
 
-
-		// r.cacheAdd(qname, nil)
-		// fmt.Printf("Checking for CNAMES! %s\n", qname)
-
-		// FIXME: will it ever make it here?
 		for _, crr := range r.cacheGet(qname, "CNAME") {
-			fmt.Printf("Checking CNAME: %s\n", crr.String())
+			// fmt.Printf("Checking CNAME: %s\n", crr.String())
 			for rr := range r.Resolve(crr.Value, qtype) {
 				r.cacheAdd(qname, rr)
 				c <- rr
@@ -169,14 +160,6 @@ type entry struct {
 	rrs map[RR]struct{}
 }
 
-func (r *Resolver) cacheRoot() {
-	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
-		if t.Error == nil {
-			r.saveDNSRR(t.RR)
-		}
-	}
-}
-
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
 func (r *Resolver) saveDNSRR(drrs ...dns.RR) {
 	for _, drr := range drrs {
@@ -208,6 +191,9 @@ func (r *Resolver) cacheAdd(qname string, rr *RR) {
 // cacheGet returns a randomly ordered slice of DNS records.
 func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
 	e := r.getEntry(qname)
+	if e == nil && r != Root {
+		e = Root.getEntry(qname)
+	}
 	if e == nil {
 		return nil
 	}
@@ -223,9 +209,6 @@ func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
 			rrs = append(rrs, &RR{rr.Name, rr.Type, rr.Value})
 		}
 	}
-	// if len(rrs) == 0 {
-	// 	return nil
-	// }
 	return rrs
 }
 
