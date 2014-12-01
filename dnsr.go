@@ -45,7 +45,7 @@ func New(size int) *Resolver {
 // For nonexistent domains (where a DNS server will return NXDOMAIN), it will simply close the output channel.
 // Specify an empty string in qtype to receive any DNS records found (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
-	c := make(chan *RR, 20)
+	c := make(chan *RR, 10)
 	go func() {
 		qname = toLowerFQDN(qname)
 		defer close(c)
@@ -97,8 +97,9 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 		}
 
 		if rrs := r.cacheGet(qname, ""); rrs != nil {
-			inject(c, rrs...)
-			//return
+			if !inject(c, rrs...) {
+				return
+			}
 
 			for _, crr := range rrs {
 				if crr.Type != "CNAME" {
@@ -107,7 +108,9 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 				// fmt.Printf("Checking CNAME: %s\n", crr.String())
 				for rr := range r.Resolve(crr.Value, qtype) {
 					r.cacheAdd(qname, rr)
-					c <- rr
+					if !inject(c, rr) {
+						return
+					}
 				}
 			}
 		}
@@ -145,10 +148,15 @@ func convertRR(drr dns.RR) *RR {
 	return nil
 }
 
-func inject(c chan<- *RR, rrs ...*RR) {
+func inject(c chan<- *RR, rrs ...*RR) bool {
 	for _, rr := range rrs {
-		c <- rr
+		select {
+		case c <- rr:
+		default:
+			return false
+		}
 	}
+	return true
 }
 
 func parent(name string) (string, bool) {

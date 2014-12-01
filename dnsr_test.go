@@ -23,16 +23,16 @@ func TestGoogleA(t *testing.T) {
 	r := New(0)
 	rrs := accum(r.Resolve("google.com", "A"))
 	st.Expect(t, len(rrs) >= 10, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 4)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 8, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 4, true)
 }
 
 func TestGoogleAny(t *testing.T) {
 	r := New(0)
 	rrs := accum(r.Resolve("google.com", ""))
 	st.Expect(t, len(rrs) >= 10, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 4)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 8, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 4, true)
 }
 
 func TestGoogleMulti(t *testing.T) {
@@ -41,7 +41,7 @@ func TestGoogleMulti(t *testing.T) {
 	rrs := accum(r.Resolve("google.com", "TXT"))
 	st.Expect(t, len(rrs) >= 10, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 8, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 4, true)
 }
 
 func TestGoogleTXT(t *testing.T) {
