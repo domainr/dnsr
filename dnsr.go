@@ -16,6 +16,7 @@ import (
 var (
 	Root        *Resolver
 	DebugLogger io.Writer
+	Timeout     = 500 * time.Millisecond
 )
 
 func init() {
@@ -40,8 +41,12 @@ func New(size int) *Resolver {
 	}
 	cache, _ := lru.New(size)
 	r := &Resolver{
-		client: &dns.Client{},
-		cache:  cache,
+		client: &dns.Client{
+			DialTimeout:  Timeout,
+			ReadTimeout:  Timeout,
+			WriteTimeout: Timeout,
+		},
+		cache: cache,
 	}
 	return r
 }
@@ -58,10 +63,13 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 	c := make(chan *RR, 20)
 	go func() {
 		if DebugLogger != nil {
+			fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
+				strings.Repeat("│   ", depth), qname, qtype, depth)
+
 			start := time.Now()
 			defer func() {
 				dur := time.Since(start)
-				if dur >= 1*time.Millisecond {
+				if true || dur >= 1*time.Millisecond {
 					fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
 						strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
 				}
@@ -72,10 +80,6 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
 			return
-		}
-		if DebugLogger != nil {
-			fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\")\n",
-				strings.Repeat("│   ", depth), qname, qtype)
 		}
 		pname, ok := qname, true
 		if qtype == "NS" {
@@ -109,12 +113,19 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 					qmsg.SetQuestion(qname, dtype)
 					qmsg.MsgHdr.RecursionDesired = false
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
-					rmsg, dur, err := r.client.Exchange(qmsg, addr)
+					start := time.Now()
+					rmsg, _, err := r.client.Exchange(qmsg, addr)
+					dur := time.Since(start)
+					if DebugLogger != nil {
+						fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
+							strings.Repeat("│   ", depth), dur/time.Millisecond, arr.Value, qname, dns.TypeToString[dtype])
+						if err != nil {
+							fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
+								strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
+						}
+					}
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
-					}
-					if DebugLogger != nil {
-						fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n", strings.Repeat("│   ", depth), dur/time.Millisecond, arr.Value, qname, dns.TypeToString[dtype])
 					}
 					r.saveDNSRR(rmsg.Answer...)
 					r.saveDNSRR(rmsg.Ns...)
