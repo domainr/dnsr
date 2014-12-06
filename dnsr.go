@@ -1,8 +1,11 @@
 package dnsr
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
@@ -79,11 +82,13 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 					qmsg.SetQuestion(qname, dtype)
 					qmsg.MsgHdr.RecursionDesired = false
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
-					rmsg, _, err := r.client.Exchange(qmsg, addr)
+					rmsg, dur, err := r.client.Exchange(qmsg, addr)
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
-					// fmt.Printf("Exchange in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
+					if dur > 1500*time.Millisecond {
+						fmt.Fprintf(os.Stderr, "Slow DNS response in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
+					}
 					r.saveDNSRR(rmsg.Answer...)
 					r.saveDNSRR(rmsg.Ns...)
 					r.saveDNSRR(rmsg.Extra...)
