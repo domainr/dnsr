@@ -74,7 +74,7 @@ func TestHerokuA(t *testing.T) {
 func TestHerokuTXT(t *testing.T) {
 	r := New(0)
 	rrs := accum(r.Resolve("us-east-1-a.route.herokuapp.com", "TXT"))
-	st.Expect(t, len(rrs), 0)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
 }
 
 func TestHerokuMulti(t *testing.T) {
@@ -106,6 +106,13 @@ func TestBlueOvenMulti(t *testing.T) {
 	rrs := accum(r.Resolve("blueoven.com", ""))
 	st.Expect(t, len(rrs), 2)
 	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
+}
+
+func TestBazCoUKAny(t *testing.T) {
+	r := New(0)
+	rrs := accum(r.Resolve("baz.co.uk", ""))
+	st.Expect(t, len(rrs) >= 4, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 4)
 }
 
 func accum(c <-chan *RR) (out []*RR) {

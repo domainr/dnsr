@@ -87,6 +87,12 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 	outer:
 		for ; ok; pname, ok = parent(pname) {
 			for nrr := range r.resolve(pname, "NS", depth+1) {
+				if qtype != "" {
+					if rrs := r.cacheGet(qname, qtype); rrs != nil {
+						inject(c, rrs...)
+						return
+					}
+				}
 				if nrr.Type != "NS" {
 					continue
 				}
