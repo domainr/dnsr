@@ -55,7 +55,7 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 }
 
 func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
-	c := make(chan *RR, 10)
+	c := make(chan *RR, 20)
 	go func() {
 		if DebugLogger != nil {
 			start := time.Now()
