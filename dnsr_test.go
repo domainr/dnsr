@@ -1,10 +1,15 @@
 package dnsr
 
 import (
+	"os"
 	"testing"
 
 	"github.com/nbio/st"
 )
+
+func init() {
+	DebugLogger = os.Stderr
+}
 
 func TestCache(t *testing.T) {
 	r := New(5)

@@ -2,7 +2,7 @@ package dnsr
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +13,10 @@ import (
 
 //go:generate sh generate.sh
 
-var Root *Resolver
+var (
+	Root        *Resolver
+	DebugLogger io.Writer
+)
 
 func init() {
 	Root = New(strings.Count(root, "\n"))
@@ -48,13 +51,31 @@ func New(size int) *Resolver {
 // For nonexistent domains (where a DNS server will return NXDOMAIN), it will simply close the output channel.
 // Specify an empty string in qtype to receive any DNS records found (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
+	return r.resolve(qname, qtype, 0)
+}
+
+func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 	c := make(chan *RR, 10)
 	go func() {
+		if DebugLogger != nil {
+			start := time.Now()
+			defer func() {
+				dur := time.Since(start)
+				if dur >= 1*time.Millisecond {
+					fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\")\n",
+						strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype)
+				}
+			}()
+		}
 		qname = toLowerFQDN(qname)
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
 			return
+		}
+		if DebugLogger != nil {
+			fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\")\n",
+				strings.Repeat("│   ", depth), qname, qtype)
 		}
 		pname, ok := qname, true
 		if qtype == "NS" {
@@ -65,11 +86,11 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 		}
 	outer:
 		for ; ok; pname, ok = parent(pname) {
-			for nrr := range r.Resolve(pname, "NS") {
+			for nrr := range r.resolve(pname, "NS", depth+1) {
 				if nrr.Type != "NS" {
 					continue
 				}
-				for arr := range r.Resolve(nrr.Value, "A") {
+				for arr := range r.resolve(nrr.Value, "A", depth+1) {
 					if arr.Type != "A" { // FIXME: support AAAA records?
 						continue
 					}
@@ -86,8 +107,8 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
-					if dur > 1500*time.Millisecond {
-						fmt.Fprintf(os.Stderr, "Slow DNS response in %s: dig @%s %s %s\n", dur.String(), arr.Value, qname, qtype)
+					if DebugLogger != nil {
+						fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n", strings.Repeat("│   ", depth), dur/time.Millisecond, arr.Value, qname, qtype)
 					}
 					r.saveDNSRR(rmsg.Answer...)
 					r.saveDNSRR(rmsg.Ns...)
@@ -111,7 +132,7 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 					continue
 				}
 				// fmt.Printf("Checking CNAME: %s\n", crr.String())
-				for rr := range r.Resolve(crr.Value, qtype) {
+				for rr := range r.resolve(crr.Value, qtype, depth+1) {
 					r.cacheAdd(qname, rr)
 					if !inject(c, rr) {
 						return
@@ -158,7 +179,7 @@ func inject(c chan<- *RR, rrs ...*RR) bool {
 		select {
 		case c <- rr:
 		default:
-			return false
+			// return false
 		}
 	}
 	return true
