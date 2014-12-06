@@ -1,6 +1,7 @@
 package dnsr
 
 import (
+	"flag"
 	"os"
 	"testing"
 
@@ -8,7 +9,15 @@ import (
 )
 
 func init() {
-	DebugLogger = os.Stderr
+	flag.Parse()
+	if testing.Verbose() {
+		DebugLogger = os.Stderr
+	}
+}
+
+func TestSimple(t *testing.T) {
+	r := New(0)
+	accum(r.Resolve("1.com", ""))
 }
 
 func TestCache(t *testing.T) {

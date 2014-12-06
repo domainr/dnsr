@@ -62,8 +62,8 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 			defer func() {
 				dur := time.Since(start)
 				if dur >= 1*time.Millisecond {
-					fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\")\n",
-						strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype)
+					fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
+						strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
 				}
 			}()
 		}
@@ -108,7 +108,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
 					if DebugLogger != nil {
-						fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n", strings.Repeat("│   ", depth), dur/time.Millisecond, arr.Value, qname, qtype)
+						fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n", strings.Repeat("│   ", depth), dur/time.Millisecond, arr.Value, qname, dns.TypeToString[dtype])
 					}
 					r.saveDNSRR(rmsg.Answer...)
 					r.saveDNSRR(rmsg.Ns...)
@@ -131,7 +131,9 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 				if crr.Type != "CNAME" {
 					continue
 				}
-				// fmt.Printf("Checking CNAME: %s\n", crr.String())
+				if DebugLogger != nil {
+					fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth), crr.String())
+				}
 				for rr := range r.resolve(crr.Value, qtype, depth+1) {
 					r.cacheAdd(qname, rr)
 					if !inject(c, rr) {
