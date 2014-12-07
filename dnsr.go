@@ -92,7 +92,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 					continue
 				}
 
-				if r.exchange(qname, qtype, depth, r.resolve(nrr.Value, "A", depth+1)) {
+				if r.exchange(nrr.Value, qname, qtype, depth) {
 					break outer
 				}
 			}
@@ -120,7 +120,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 	return c
 }
 
-func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *RR) bool {
+func (r *Resolver) exchange(host string, qname string, qtype string, depth int) bool {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
 		dtype = dns.TypeA
@@ -129,11 +129,11 @@ func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *
 	qmsg.SetQuestion(qname, dtype)
 	qmsg.MsgHdr.RecursionDesired = false
 
-	// Produce
+	// Query each DNS server
 	c := make(chan bool, 10)
 	timeout := time.After(Timeout)
-	for arr := range arrs {
-		if arr.Type != "A" { // FIXME: support AAAA records?
+	for rr := range r.resolve(host, "A", depth+1) {
+		if rr.Type != "A" { // FIXME: support AAAA records?
 			continue
 		}
 		go func(addr string) {
@@ -150,10 +150,10 @@ func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *
 				r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
 			}
 			c <- true
-		}(arr.Value + ":53")
+		}(rr.Value + ":53")
 	}
 
-	// Consume
+	// Wait for the first valid response
 	for {
 		select {
 		case success, ok := <-c:
@@ -166,6 +166,43 @@ func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *
 	}
 
 	return false
+}
+
+func logResolveStart(qname string, qtype string, depth int) {
+	if DebugLogger == nil {
+		return
+	}
+	fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
+		strings.Repeat("│   ", depth), qname, qtype, depth)
+}
+
+func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
+	if DebugLogger == nil {
+		return
+	}
+	dur := time.Since(start)
+	fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
+		strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
+}
+
+func logCNAME(depth int, cname string) {
+	if DebugLogger == nil {
+		return
+	}
+	fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth), cname)
+}
+
+func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err error) {
+	if DebugLogger == nil {
+		return
+	}
+	dur := time.Since(start)
+	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
+		strings.Repeat("│   ", depth), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
+	if err != nil {
+		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
+			strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
+	}
 }
 
 // RR represents a DNS resource record.
@@ -297,43 +334,4 @@ func (r *Resolver) getEntry(qname string) *entry {
 		return nil
 	}
 	return e
-}
-
-// Logging utility functions
-
-func logResolveStart(qname string, qtype string, depth int) {
-	if DebugLogger == nil {
-		return
-	}
-	fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
-		strings.Repeat("│   ", depth), qname, qtype, depth)
-}
-
-func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
-	if DebugLogger == nil {
-		return
-	}
-	dur := time.Since(start)
-	fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
-		strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
-}
-
-func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err error) {
-	if DebugLogger == nil {
-		return
-	}
-	dur := time.Since(start)
-	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
-		strings.Repeat("│   ", depth), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
-	if err != nil {
-		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
-			strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
-	}
-}
-
-func logCNAME(depth int, cname string) {
-	if DebugLogger == nil {
-		return
-	}
-	fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth), cname)
 }
