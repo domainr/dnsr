@@ -69,7 +69,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		if r.recall(c, qname, qtype) {
 			return
 		}
-		r.resolveParent(c, qname, qtype, depth)
+		r.resolveNS(c, qname, qtype, depth)
 	}()
 	return c
 }
@@ -82,9 +82,9 @@ func (r *Resolver) recall(c chan<- *RR, qname string, qtype string) bool {
 	return false
 }
 
-func (r *Resolver) resolveParent(c chan<- *RR, qname string, qtype string, depth int) {
+func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int) {
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
-		if pname == qname && qtype == "NS" {
+		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
 			continue
 		}
 		for nrr := range r.resolve(pname, "NS", depth+1) {
