@@ -4,7 +4,7 @@
 
 Iterative DNS resolver for Go.
 
-The `Resolve` method on `dnsr.Resolver` queries DNS for given name and type (`A`, `NS`, `CNAME`, etc.). The resolver caches responses for queries, and liberally (aggressively?) returns DNS records for a given name, not waiting for slow or broken name servers. It runs each query in 1 or more goroutine internally, and returns results in a slice of `*dnsr.RR`.
+The `Resolve` method on `dnsr.Resolver` queries DNS for given name and type (`A`, `NS`, `CNAME`, etc.). The resolver caches responses for queries, and liberally (aggressively?) returns DNS records for a given name, not waiting for slow or broken name servers.
 
 This code leans heavily on [Miek Gieben’s](https://github.com/miekg) excellent [dns library for Go](https://github.com/miekg/dns).
 
