@@ -14,9 +14,12 @@ import (
 //go:generate sh generate.sh
 
 var (
-	Root        *Resolver
-	DebugLogger io.Writer
-	Timeout     = 500 * time.Millisecond
+	Root           *Resolver
+	DebugLogger    io.Writer
+	Timeout        = 1000 * time.Millisecond
+	MaxRecursion   = 10
+	MaxNameservers = 2
+	MaxIPs         = 2
 )
 
 func init() {
@@ -60,6 +63,12 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 }
 
 func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
+	if depth++; depth > MaxRecursion {
+		logMaxRecursion(qname, qtype, depth)
+		c := make(chan *RR)
+		close(c)
+		return c
+	}
 	qname = toLowerFQDN(qname)
 	if rrs := r.cacheGet(qname, qtype); rrs != nil {
 		c := make(chan *RR, len(rrs))
@@ -93,20 +102,22 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 		}
 
 		// Query all DNS servers in parallel
-		found := false
-		for nrr := range r.resolve(pname, "NS", depth+1) {
+		count := 0
+		for nrr := range r.resolve(pname, "NS", depth) {
 			if qtype != "" && r.recall(c, qname, qtype) {
 				return
 			}
 			if nrr.Type != "NS" {
 				continue
 			}
+			if count++; count > MaxNameservers {
+				break
+			}
 			go r.exchange(success, c, nrr.Value, qname, qtype, depth)
-			found = true
 		}
 
 		// Wait for first response
-		if found {
+		if count > 0 {
 			select {
 			case <-success:
 				r.resolveCNAMEs(c, qname, qtype, depth)
@@ -128,9 +139,15 @@ func (r *Resolver) exchange(success chan<- bool, c chan<- *RR, host string, qnam
 	qmsg.MsgHdr.RecursionDesired = false
 
 	// Find each A record for the DNS server
-	for rr := range r.resolve(host, "A", depth+1) {
+	count := 0
+	for rr := range r.resolve(host, "A", depth) {
 		if rr.Type != "A" { // FIXME: support AAAA records?
 			continue
+		}
+
+		// Never query more than MaxIPs for any nameserver
+		if count++; count > MaxIPs {
+			return
 		}
 
 		// Synchronously query this DNS server
@@ -165,7 +182,7 @@ func (r *Resolver) resolveCNAMEs(c chan<- *RR, qname string, qtype string, depth
 			continue
 		}
 		logCNAME(depth, crr.String())
-		for rr := range r.resolve(crr.Value, qtype, depth+1) {
+		for rr := range r.resolve(crr.Value, qtype, depth) {
 			r.cacheAdd(qname, rr)
 			if !inject(c, rr) {
 				return
@@ -197,12 +214,17 @@ func toLowerFQDN(name string) string {
 	return dns.Fqdn(strings.ToLower(name))
 }
 
+func logMaxRecursion(qname string, qtype string, depth int) {
+	fmt.Printf("%s Error: MAX RECURSION @ %s %s %d\n",
+		strings.Repeat("│   ", depth-1), qname, qtype, depth)
+}
+
 func logResolveStart(qname string, qtype string, depth int) {
 	if DebugLogger == nil {
 		return
 	}
 	fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
-		strings.Repeat("│   ", depth), qname, qtype, depth)
+		strings.Repeat("│   ", depth-1), qname, qtype, depth)
 }
 
 func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
@@ -211,14 +233,14 @@ func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
 	}
 	dur := time.Since(start)
 	fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
-		strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
+		strings.Repeat("│   ", depth-1), dur/time.Millisecond, qname, qtype, depth)
 }
 
 func logCNAME(depth int, cname string) {
 	if DebugLogger == nil {
 		return
 	}
-	fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth), cname)
+	fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth-1), cname)
 }
 
 func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err error) {
@@ -227,10 +249,10 @@ func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err err
 	}
 	dur := time.Since(start)
 	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
-		strings.Repeat("│   ", depth), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
+		strings.Repeat("│   ", depth-1), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
 	if err != nil {
 		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
-			strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
+			strings.Repeat("│   ", depth-1), dur/time.Millisecond, err.Error())
 	}
 }
 
