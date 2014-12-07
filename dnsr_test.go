@@ -132,11 +132,8 @@ func testResolve() {
 	accum(testResolver.Resolve("us-east-1-a.route.herokuapp.com", ""))
 }
 
-func accum(c <-chan *RR) (out []*RR) {
-	for rr := range c {
-		out = append(out, rr)
-	}
-	return
+func accum(in []*RR) []*RR {
+	return in
 }
 
 func count(rrs []*RR, f func(*RR) bool) (out int) {

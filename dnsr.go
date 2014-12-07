@@ -58,43 +58,25 @@ func New(size int) *Resolver {
 // The implementation guarantees that the output channel will close, so it is safe to range over.
 // For nonexistent domains (where a DNS server will return NXDOMAIN), it will simply close the output channel.
 // Specify an empty string in qtype to receive any DNS records found (currently A, AAAA, NS, CNAME, and TXT).
-func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
+func (r *Resolver) Resolve(qname string, qtype string) []*RR {
 	return r.resolve(qname, qtype, 0)
 }
 
-func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
+func (r *Resolver) resolve(qname string, qtype string, depth int) []*RR {
 	if depth++; depth > MaxRecursion {
 		logMaxRecursion(qname, qtype, depth)
-		c := make(chan *RR)
-		close(c)
-		return c
+		return nil
 	}
 	qname = toLowerFQDN(qname)
 	if rrs := r.cacheGet(qname, qtype); rrs != nil {
-		c := make(chan *RR, len(rrs))
-		inject(c, rrs...)
-		close(c)
-		return c
+		return rrs
 	}
-	c := make(chan *RR, 20)
-	go func() {
-		defer close(c)
-		logResolveStart(qname, qtype, depth)
-		defer logResolveEnd(qname, qtype, depth, time.Now())
-		r.resolveNS(c, qname, qtype, depth)
-	}()
-	return c
+	logResolveStart(qname, qtype, depth)
+	defer logResolveEnd(qname, qtype, depth, time.Now())
+	return r.resolveNS(qname, qtype, depth)
 }
 
-func (r *Resolver) recall(c chan<- *RR, qname string, qtype string) bool {
-	if rrs := r.cacheGet(qname, qtype); rrs != nil {
-		inject(c, rrs...)
-		return true
-	}
-	return false
-}
-
-func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int) {
+func (r *Resolver) resolveNS(qname string, qtype string, depth int) []*RR {
 	success := make(chan bool, 1)
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
@@ -103,9 +85,11 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 
 		// Query all DNS servers in parallel
 		count := 0
-		for nrr := range r.resolve(pname, "NS", depth) {
-			if qtype != "" && r.recall(c, qname, qtype) {
-				return
+		for _, nrr := range r.resolve(pname, "NS", depth) {
+			if qtype != "" { // Early out for specific queries
+				if rrs := r.cacheGet(qname, qtype); rrs != nil {
+					return rrs
+				}
 			}
 			if nrr.Type != "NS" {
 				continue
@@ -120,13 +104,13 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 		if count > 0 {
 			select {
 			case <-success:
-				r.resolveCNAMEs(c, qname, qtype, depth)
-				return
+				return r.resolveCNAMEs(qname, qtype, depth)
 			case <-time.After(Timeout):
 				continue
 			}
 		}
 	}
+	return nil
 }
 
 func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtype string, depth int) {
@@ -140,7 +124,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 
 	// Find each A record for the DNS server
 	count := 0
-	for rr := range r.resolve(host, "A", depth) {
+	for _, rr := range r.resolve(host, "A", depth) {
 		if rr.Type != "A" { // FIXME: support AAAA records?
 			continue
 		}
@@ -163,47 +147,36 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 			r.cacheAdd(qname, nil)
 		}
 
-		// If successful, cache the results and return
+		// If successful, cache the results
 		r.saveDNSRR(rmsg.Answer...)
 		r.saveDNSRR(rmsg.Ns...)
 		r.saveDNSRR(rmsg.Extra...)
+
 		// Never block
 		select {
 		case success <- true:
 		default:
 		}
+
+		// Return after first successful network request
 		return
 	}
 }
 
-func (r *Resolver) resolveCNAMEs(c chan<- *RR, qname string, qtype string, depth int) {
-	rrs := r.cacheGet(qname, "")
-	if rrs == nil || !inject(c, rrs...) {
-		return
-	}
-	for _, crr := range rrs {
+func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
+	var rrs []*RR
+	for _, crr := range r.cacheGet(qname, "") {
+		rrs = append(rrs, crr)
 		if crr.Type != "CNAME" {
 			continue
 		}
 		logCNAME(depth, crr.String())
-		for rr := range r.resolve(crr.Value, qtype, depth) {
+		for _, rr := range r.resolve(crr.Value, qtype, depth) {
 			r.cacheAdd(qname, rr)
-			if !inject(c, rr) {
-				return
-			}
+			rrs = append(rrs, crr)
 		}
 	}
-}
-
-func inject(c chan<- *RR, rrs ...*RR) bool {
-	for _, rr := range rrs {
-		select {
-		case c <- rr:
-		default:
-			// return false
-		}
-	}
-	return true
+	return rrs
 }
 
 func parent(name string) (string, bool) {
