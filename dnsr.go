@@ -77,6 +77,15 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 				return
 			}
 		}
+
+		dtype := dns.StringToType[qtype]
+		if dtype == 0 {
+			dtype = dns.TypeA
+		}
+		qmsg := &dns.Msg{}
+		qmsg.SetQuestion(qname, dtype)
+		qmsg.MsgHdr.RecursionDesired = false
+
 	outer:
 		for ; ok; pname, ok = parent(pname) {
 			for nrr := range r.resolve(pname, "NS", depth+1) {
@@ -93,17 +102,8 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 					if arr.Type != "A" { // FIXME: support AAAA records?
 						continue
 					}
-					addr := arr.Value + ":53"
-					dtype, ok := dns.StringToType[qtype]
-					if !ok {
-						dtype = dns.TypeA
-					}
-					qmsg := &dns.Msg{}
-					qmsg.SetQuestion(qname, dtype)
-					qmsg.MsgHdr.RecursionDesired = false
-					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
 					start := time.Now()
-					rmsg, _, err := r.client.Exchange(qmsg, addr)
+					rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
 					logExchange(qname, dns.TypeToString[dtype], depth, start, arr.Value, err)
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
