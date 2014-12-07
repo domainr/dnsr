@@ -66,26 +66,21 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		logResolveStart(qname, qtype, depth)
 		defer logResolveEnd(qname, qtype, depth, time.Now())
 		qname = toLowerFQDN(qname)
-		if rrs := r.cacheGet(qname, qtype); rrs != nil {
-			inject(c, rrs...)
+		if r.recall(c, qname, qtype) {
 			return
 		}
 
 		pname, ok := qname, true
 		if qtype == "NS" {
-			pname, ok = parent(qname)
-			if !ok {
+			if pname, ok = parent(qname); !ok {
 				return
 			}
 		}
 
 		for ; ok; pname, ok = parent(pname) {
 			for nrr := range r.resolve(pname, "NS", depth+1) {
-				if qtype != "" {
-					if rrs := r.cacheGet(qname, qtype); rrs != nil {
-						inject(c, rrs...)
-						return
-					}
+				if qtype != "" && r.recall(c, qname, qtype) {
+					return
 				}
 				if nrr.Type != "NS" {
 					continue
@@ -99,6 +94,14 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		}
 	}()
 	return c
+}
+
+func (r *Resolver) recall(c chan<- *RR, qname string, qtype string) bool {
+	if rrs := r.cacheGet(qname, qtype); rrs != nil {
+		inject(c, rrs...)
+		return true
+	}
+	return false
 }
 
 func (r *Resolver) exchange(host string, qname string, qtype string, depth int) bool {
