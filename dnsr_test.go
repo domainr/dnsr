@@ -111,8 +111,8 @@ func TestBlueOvenMulti(t *testing.T) {
 func TestBazCoUKAny(t *testing.T) {
 	r := New(0)
 	rrs := accum(r.Resolve("baz.co.uk", ""))
-	st.Expect(t, len(rrs) >= 4, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 4)
+	st.Expect(t, len(rrs) >= 2, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 }
 
 func accum(c <-chan *RR) (out []*RR) {
