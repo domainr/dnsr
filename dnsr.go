@@ -62,19 +62,8 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 	c := make(chan *RR, 20)
 	go func() {
-		if DebugLogger != nil {
-			fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
-				strings.Repeat("│   ", depth), qname, qtype, depth)
-
-			start := time.Now()
-			defer func() {
-				dur := time.Since(start)
-				if true || dur >= 1*time.Millisecond {
-					fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
-						strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
-				}
-			}()
-		}
+		logResolveStart(qname, qtype, depth)
+		defer logResolveEnd(qname, qtype, depth, time.Now())
 		qname = toLowerFQDN(qname)
 		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
@@ -115,15 +104,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 					// fmt.Printf(";; dig +norecurse @%s %s %s\n", a.A.String(), qname, dns.TypeToString[qtype])
 					start := time.Now()
 					rmsg, _, err := r.client.Exchange(qmsg, addr)
-					dur := time.Since(start)
-					if DebugLogger != nil {
-						fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
-							strings.Repeat("│   ", depth), dur/time.Millisecond, arr.Value, qname, dns.TypeToString[dtype])
-						if err != nil {
-							fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
-								strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
-						}
-					}
+					logExchange(qname, dns.TypeToString[dtype], depth, start, arr.Value, err)
 					if err != nil {
 						continue // FIXME: handle errors better from flaky/failing NS servers
 					}
@@ -161,6 +142,36 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		}
 	}()
 	return c
+}
+
+func logResolveStart(qname string, qtype string, depth int) {
+	if DebugLogger == nil {
+		return
+	}
+	fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
+		strings.Repeat("│   ", depth), qname, qtype, depth)
+}
+
+func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
+	if DebugLogger == nil {
+		return
+	}
+	dur := time.Since(start)
+	fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
+		strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
+}
+
+func logExchange(qname string, qtype string, depth int, start time.Time, host string, err error) {
+	if DebugLogger == nil {
+		return
+	}
+	dur := time.Since(start)
+	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
+		strings.Repeat("│   ", depth), dur/time.Millisecond, host, qname, qtype)
+	if err != nil {
+		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
+			strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
+	}
 }
 
 // RR represents a DNS resource record.
