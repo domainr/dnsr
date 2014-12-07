@@ -113,7 +113,7 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 			if count++; count > MaxNameservers {
 				break
 			}
-			go r.exchange(success, c, nrr.Value, qname, qtype, depth)
+			go r.exchange(success, nrr.Value, qname, qtype, depth)
 		}
 
 		// Wait for first response
@@ -129,7 +129,7 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 	}
 }
 
-func (r *Resolver) exchange(success chan<- bool, c chan<- *RR, host string, qname string, qtype string, depth int) {
+func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtype string, depth int) {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
 		dtype = dns.TypeA
