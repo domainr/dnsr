@@ -151,17 +151,17 @@ func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *
 			}
 			c <- true
 		}(arr.Value + ":53")
+	}
 
-		// Consume
-		for {
-			select {
-			case success, ok := <-c:
-				if ok {
-					return success
-				}
-			case <-timeout:
-				return false
+	// Consume
+	for {
+		select {
+		case success, ok := <-c:
+			if ok {
+				return success
 			}
+		case <-timeout:
+			return false
 		}
 	}
 
