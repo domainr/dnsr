@@ -75,15 +75,7 @@ func query(name, qtype string) {
 		os.Exit(1)
 	}
 
-	rrc := resolver.Resolve(qname, qtype)
-	rrs := []*dnsr.RR{}
-	for rr := range rrc {
-		if rr == nil {
-			logV("@{r}\n;; NIL RR!\n")
-			continue
-		}
-		rrs = append(rrs, rr)
-	}
+	rrs := resolver.Resolve(qname, qtype)
 
 	color.Printf("\n")
 	if len(rrs) > 0 {
