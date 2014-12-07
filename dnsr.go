@@ -306,5 +306,8 @@ func logExchange(qname string, qtype string, depth int, start time.Time, host st
 }
 
 func logCNAME(depth int, cname string) {
+	if DebugLogger == nil {
+		return
+	}
 	fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth), cname)
 }
