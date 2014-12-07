@@ -164,7 +164,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 }
 
 func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
-	var rrs []*RR
+	rrs := []*RR{} // Return non-nil slice indicating difference between NXDOMAIN and an error
 	for _, crr := range r.cacheGet(qname, "") {
 		rrs = append(rrs, crr)
 		if crr.Type != "CNAME" {
