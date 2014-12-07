@@ -81,8 +81,8 @@ func TestHerokuMulti(t *testing.T) {
 	r := New(0)
 	accum(r.Resolve("us-east-1-a.route.herokuapp.com", "A"))
 	rrs := accum(r.Resolve("us-east-1-a.route.herokuapp.com", "TXT"))
-	st.Expect(t, len(rrs), 1)
-	st.Expect(t, rrs[0].Type, "A")
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestBlueOvenA(t *testing.T) {

@@ -83,11 +83,14 @@ func (r *Resolver) recall(c chan<- *RR, qname string, qtype string) bool {
 }
 
 func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int) {
+	success := make(chan bool)
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
 			continue
 		}
-		success := make(chan bool)
+
+		// Query all DNS servers in parallel
+		found := false
 		for nrr := range r.resolve(pname, "NS", depth+1) {
 			if qtype != "" && r.recall(c, qname, qtype) {
 				return
@@ -97,7 +100,11 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 			}
 
 			go r.exchange(success, c, nrr.Value, qname, qtype, depth)
+			found = true
+		}
 
+		// Wait for first response
+		if found {
 			select {
 			case <-success:
 				r.resolveCNAMEs(c, qname, qtype, depth)
@@ -123,21 +130,24 @@ func (r *Resolver) exchange(success chan<- bool, c chan<- *RR, host string, qnam
 		if rr.Type != "A" { // FIXME: support AAAA records?
 			continue
 		}
-		go func(addr string) {
-			start := time.Now()
-			rmsg, _, err := r.client.Exchange(qmsg, addr)
-			logExchange(addr, qmsg, depth, start, err)
-			if err != nil {
-				return
-			}
-			r.saveDNSRR(rmsg.Answer...)
-			r.saveDNSRR(rmsg.Ns...)
-			r.saveDNSRR(rmsg.Extra...)
-			if rmsg.Rcode == dns.RcodeNameError {
-				r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
-			}
-			success <- true
-		}(rr.Value + ":53")
+
+		// Synchronously query this DNS server
+		start := time.Now()
+		rmsg, _, err := r.client.Exchange(qmsg, rr.Value+":53")
+		logExchange(rr.Value, qmsg, depth, start, err)
+		if err != nil {
+			continue
+		}
+
+		// If successful, cache the results and return
+		r.saveDNSRR(rmsg.Answer...)
+		r.saveDNSRR(rmsg.Ns...)
+		r.saveDNSRR(rmsg.Extra...)
+		if rmsg.Rcode == dns.RcodeNameError {
+			r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
+		}
+		success <- true
+		return
 	}
 }
 
