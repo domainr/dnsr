@@ -78,14 +78,6 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 			}
 		}
 
-		dtype := dns.StringToType[qtype]
-		if dtype == 0 {
-			dtype = dns.TypeA
-		}
-		qmsg := &dns.Msg{}
-		qmsg.SetQuestion(qname, dtype)
-		qmsg.MsgHdr.RecursionDesired = false
-
 	outer:
 		for ; ok; pname, ok = parent(pname) {
 			for nrr := range r.resolve(pname, "NS", depth+1) {
@@ -98,23 +90,8 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 				if nrr.Type != "NS" {
 					continue
 				}
-				for arr := range r.resolve(nrr.Value, "A", depth+1) {
-					if arr.Type != "A" { // FIXME: support AAAA records?
-						continue
-					}
-					start := time.Now()
-					rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
-					logExchange(qname, dns.TypeToString[dtype], depth, start, arr.Value, err)
-					if err != nil {
-						continue // FIXME: handle errors better from flaky/failing NS servers
-					}
-					r.saveDNSRR(rmsg.Answer...)
-					r.saveDNSRR(rmsg.Ns...)
-					r.saveDNSRR(rmsg.Extra...)
-					if rmsg.Rcode == dns.RcodeNameError {
-						r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
-						return
-					}
+
+				if r.exchange(qname, qtype, depth, r.resolve(nrr.Value, "A", depth+1)) {
 					break outer
 				}
 			}
@@ -140,6 +117,37 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		}
 	}()
 	return c
+}
+
+func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *RR) bool {
+	dtype := dns.StringToType[qtype]
+	if dtype == 0 {
+		dtype = dns.TypeA
+	}
+	qmsg := &dns.Msg{}
+	qmsg.SetQuestion(qname, dtype)
+	qmsg.MsgHdr.RecursionDesired = false
+
+	for arr := range arrs {
+		if arr.Type != "A" { // FIXME: support AAAA records?
+			continue
+		}
+		start := time.Now()
+		rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
+		logExchange(arr.Value, qmsg, depth, start, err)
+		if err != nil {
+			continue // FIXME: handle errors better from flaky/failing NS servers
+		}
+		r.saveDNSRR(rmsg.Answer...)
+		r.saveDNSRR(rmsg.Ns...)
+		r.saveDNSRR(rmsg.Extra...)
+		if rmsg.Rcode == dns.RcodeNameError {
+			r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
+			return true
+		}
+		return true
+	}
+	return false
 }
 
 // RR represents a DNS resource record.
@@ -292,13 +300,13 @@ func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
 		strings.Repeat("│   ", depth), dur/time.Millisecond, qname, qtype, depth)
 }
 
-func logExchange(qname string, qtype string, depth int, start time.Time, host string, err error) {
+func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err error) {
 	if DebugLogger == nil {
 		return
 	}
 	dur := time.Since(start)
 	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
-		strings.Repeat("│   ", depth), dur/time.Millisecond, host, qname, qtype)
+		strings.Repeat("│   ", depth), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
 	if err != nil {
 		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
 			strings.Repeat("│   ", depth), dur/time.Millisecond, err.Error())
