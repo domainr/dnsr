@@ -69,29 +69,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 		if r.recall(c, qname, qtype) {
 			return
 		}
-
-		pname, ok := qname, true
-		if qtype == "NS" {
-			if pname, ok = parent(qname); !ok {
-				return
-			}
-		}
-
-		for ; ok; pname, ok = parent(pname) {
-			for nrr := range r.resolve(pname, "NS", depth+1) {
-				if qtype != "" && r.recall(c, qname, qtype) {
-					return
-				}
-				if nrr.Type != "NS" {
-					continue
-				}
-
-				if r.exchange(nrr.Value, qname, qtype, depth) {
-					r.resolveCNAMEs(c, qname, qtype, depth)
-					return
-				}
-			}
-		}
+		r.resolveParent(c, qname, qtype, depth)
 	}()
 	return c
 }
@@ -102,6 +80,27 @@ func (r *Resolver) recall(c chan<- *RR, qname string, qtype string) bool {
 		return true
 	}
 	return false
+}
+
+func (r *Resolver) resolveParent(c chan<- *RR, qname string, qtype string, depth int) {
+	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
+		if pname == qname && qtype == "NS" {
+			continue
+		}
+		for nrr := range r.resolve(pname, "NS", depth+1) {
+			if qtype != "" && r.recall(c, qname, qtype) {
+				return
+			}
+			if nrr.Type != "NS" {
+				continue
+			}
+
+			if r.exchange(nrr.Value, qname, qtype, depth) {
+				r.resolveCNAMEs(c, qname, qtype, depth)
+				return
+			}
+		}
+	}
 }
 
 func (r *Resolver) exchange(host string, qname string, qtype string, depth int) bool {
