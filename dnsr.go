@@ -95,7 +95,7 @@ func (r *Resolver) recall(c chan<- *RR, qname string, qtype string) bool {
 }
 
 func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int) {
-	success := make(chan bool)
+	success := make(chan bool, 1)
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
 			continue
@@ -167,7 +167,9 @@ func (r *Resolver) exchange(success chan<- bool, c chan<- *RR, host string, qnam
 		r.saveDNSRR(rmsg.Answer...)
 		r.saveDNSRR(rmsg.Ns...)
 		r.saveDNSRR(rmsg.Extra...)
-		success <- true
+		select {
+			case success <- true: // Never block
+		}
 		return
 	}
 }
