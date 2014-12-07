@@ -98,7 +98,6 @@ func (r *Resolver) resolveNS(c chan<- *RR, qname string, qtype string, depth int
 			if nrr.Type != "NS" {
 				continue
 			}
-
 			go r.exchange(success, c, nrr.Value, qname, qtype, depth)
 			found = true
 		}
