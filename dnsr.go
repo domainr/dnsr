@@ -154,10 +154,7 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 
 func (r *Resolver) resolveCNAMEs(c chan<- *RR, qname string, qtype string, depth int) {
 	rrs := r.cacheGet(qname, "")
-	if rrs == nil {
-		return
-	}
-	if !inject(c, rrs...) {
+	if rrs == nil || !inject(c, rrs...) {
 		return
 	}
 	for _, crr := range rrs {
