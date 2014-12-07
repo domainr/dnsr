@@ -85,6 +85,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 				if qtype != "" {
 					if rrs := r.cacheGet(qname, qtype); rrs != nil {
 						inject(c, rrs...)
+						fmt.Printf("**** EARLY EXIT: %s %s ****\n", qname, qtype)
 						return
 					}
 				}
@@ -98,24 +99,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 			}
 		}
 
-		if rrs := r.cacheGet(qname, ""); rrs != nil {
-			if !inject(c, rrs...) {
-				return
-			}
-
-			for _, crr := range rrs {
-				if crr.Type != "CNAME" {
-					continue
-				}
-				logCNAME(depth, crr.String())
-				for rr := range r.resolve(crr.Value, qtype, depth+1) {
-					r.cacheAdd(qname, rr)
-					if !inject(c, rr) {
-						return
-					}
-				}
-			}
-		}
+		r.resolveCNAMEs(c, qname, qtype, depth)
 	}()
 	return c
 }
@@ -166,6 +150,51 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 	}
 
 	return false
+}
+
+func (r *Resolver) resolveCNAMEs(c chan<- *RR, qname string, qtype string, depth int) {
+	rrs := r.cacheGet(qname, "")
+	if rrs == nil {
+		return
+	}
+	if !inject(c, rrs...) {
+		return
+	}
+	for _, crr := range rrs {
+		if crr.Type != "CNAME" {
+			continue
+		}
+		logCNAME(depth, crr.String())
+		for rr := range r.resolve(crr.Value, qtype, depth+1) {
+			r.cacheAdd(qname, rr)
+			if !inject(c, rr) {
+				return
+			}
+		}
+	}
+}
+
+func inject(c chan<- *RR, rrs ...*RR) bool {
+	for _, rr := range rrs {
+		select {
+		case c <- rr:
+		default:
+			// return false
+		}
+	}
+	return true
+}
+
+func parent(name string) (string, bool) {
+	labels := dns.SplitDomainName(name)
+	if labels == nil {
+		return "", false
+	}
+	return toLowerFQDN(strings.Join(labels[1:], ".")), true
+}
+
+func toLowerFQDN(name string) string {
+	return dns.Fqdn(strings.ToLower(name))
 }
 
 func logResolveStart(qname string, qtype string, depth int) {
@@ -233,29 +262,6 @@ func convertRR(drr dns.RR) *RR {
 		// fmt.Printf("%s\n", drr.String())
 	}
 	return nil
-}
-
-func inject(c chan<- *RR, rrs ...*RR) bool {
-	for _, rr := range rrs {
-		select {
-		case c <- rr:
-		default:
-			// return false
-		}
-	}
-	return true
-}
-
-func parent(name string) (string, bool) {
-	labels := dns.SplitDomainName(name)
-	if labels == nil {
-		return "", false
-	}
-	return toLowerFQDN(strings.Join(labels[1:], ".")), true
-}
-
-func toLowerFQDN(name string) string {
-	return dns.Fqdn(strings.ToLower(name))
 }
 
 type key struct {
