@@ -51,6 +51,9 @@ func main() {
 	} else if _, isType := dns.StringToType[args[len(args)-1]]; len(args) > 1 && isType {
 		qtype, args = args[len(args)-1], args[:len(args)-1]
 	}
+	if verbose {
+		dnsr.DebugLogger = os.Stderr
+	}
 	var wg sync.WaitGroup
 	start := time.Now()
 	for _, name := range args {
