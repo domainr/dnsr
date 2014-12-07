@@ -62,14 +62,15 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
 	c := make(chan *RR, 20)
 	go func() {
+		defer close(c)
 		logResolveStart(qname, qtype, depth)
 		defer logResolveEnd(qname, qtype, depth, time.Now())
 		qname = toLowerFQDN(qname)
-		defer close(c)
 		if rrs := r.cacheGet(qname, qtype); rrs != nil {
 			inject(c, rrs...)
 			return
 		}
+
 		pname, ok := qname, true
 		if qtype == "NS" {
 			pname, ok = parent(qname)
@@ -128,25 +129,42 @@ func (r *Resolver) exchange(qname string, qtype string, depth int, arrs <-chan *
 	qmsg.SetQuestion(qname, dtype)
 	qmsg.MsgHdr.RecursionDesired = false
 
+	// Produce
+	c := make(chan bool, 10)
+	timeout := time.After(Timeout)
 	for arr := range arrs {
 		if arr.Type != "A" { // FIXME: support AAAA records?
 			continue
 		}
-		start := time.Now()
-		rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
-		logExchange(arr.Value, qmsg, depth, start, err)
-		if err != nil {
-			continue // FIXME: handle errors better from flaky/failing NS servers
+		go func(addr string) {
+			start := time.Now()
+			rmsg, _, err := r.client.Exchange(qmsg, addr)
+			logExchange(addr, qmsg, depth, start, err)
+			if err != nil {
+				return
+			}
+			r.saveDNSRR(rmsg.Answer...)
+			r.saveDNSRR(rmsg.Ns...)
+			r.saveDNSRR(rmsg.Extra...)
+			if rmsg.Rcode == dns.RcodeNameError {
+				r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
+			}
+			c <- true
+		}(arr.Value + ":53")
+
+		// Consume
+		for {
+			select {
+			case success, ok := <-c:
+				if ok {
+					return success
+				}
+			case <-timeout:
+				return false
+			}
 		}
-		r.saveDNSRR(rmsg.Answer...)
-		r.saveDNSRR(rmsg.Ns...)
-		r.saveDNSRR(rmsg.Extra...)
-		if rmsg.Rcode == dns.RcodeNameError {
-			r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
-			return true
-		}
-		return true
 	}
+
 	return false
 }
 
