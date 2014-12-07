@@ -54,9 +54,8 @@ func New(size int) *Resolver {
 	return r
 }
 
-// Resolve finds DNS records of type qtype for the domain qname. It returns a channel of *RR.
-// The implementation guarantees that the output channel will close, so it is safe to range over.
-// For nonexistent domains (where a DNS server will return NXDOMAIN), it will simply close the output channel.
+// Resolve finds DNS records of type qtype for the domain qname. It returns a slice of *RR.
+// For nonexistent domains (where a DNS server will return NXDOMAIN), it will return an empty, non-nil slice.
 // Specify an empty string in qtype to receive any DNS records found (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) []*RR {
 	return r.resolve(qname, qtype, 0)
