@@ -8,11 +8,15 @@ import (
 	"github.com/nbio/st"
 )
 
+var testResolver *Resolver
+
 func init() {
 	flag.Parse()
 	if testing.Verbose() {
 		DebugLogger = os.Stderr
 	}
+	testResolver = New(0)
+	testResolve()
 }
 
 func TestSimple(t *testing.T) {
@@ -68,7 +72,7 @@ func TestGoogleTXT(t *testing.T) {
 func TestHerokuA(t *testing.T) {
 	r := New(0)
 	rrs := accum(r.Resolve("us-east-1-a.route.herokuapp.com", "A"))
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 1)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestHerokuTXT(t *testing.T) {
@@ -113,6 +117,19 @@ func TestBazCoUKAny(t *testing.T) {
 	rrs := accum(r.Resolve("baz.co.uk", ""))
 	st.Expect(t, len(rrs) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
+}
+
+func BenchmarkResolve(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		testResolve()
+	}
+}
+
+func testResolve() {
+	accum(testResolver.Resolve("google.com", ""))
+	accum(testResolver.Resolve("blueoven.com", ""))
+	accum(testResolver.Resolve("baz.co.uk", ""))
+	accum(testResolver.Resolve("us-east-1-a.route.herokuapp.com", ""))
 }
 
 func accum(c <-chan *RR) (out []*RR) {

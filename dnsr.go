@@ -60,15 +60,18 @@ func (r *Resolver) Resolve(qname string, qtype string) <-chan *RR {
 }
 
 func (r *Resolver) resolve(qname string, qtype string, depth int) <-chan *RR {
+	qname = toLowerFQDN(qname)
+	if rrs := r.cacheGet(qname, qtype); rrs != nil {
+		c := make(chan *RR, len(rrs))
+		inject(c, rrs...)
+		close(c)
+		return c
+	}
 	c := make(chan *RR, 20)
 	go func() {
 		defer close(c)
 		logResolveStart(qname, qtype, depth)
 		defer logResolveEnd(qname, qtype, depth, time.Now())
-		qname = toLowerFQDN(qname)
-		if r.recall(c, qname, qtype) {
-			return
-		}
 		r.resolveNS(c, qname, qtype, depth)
 	}()
 	return c
