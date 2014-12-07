@@ -167,8 +167,10 @@ func (r *Resolver) exchange(success chan<- bool, c chan<- *RR, host string, qnam
 		r.saveDNSRR(rmsg.Answer...)
 		r.saveDNSRR(rmsg.Ns...)
 		r.saveDNSRR(rmsg.Extra...)
+		// Never block
 		select {
-			case success <- true: // Never block
+		case success <- true:
+		default:
 		}
 		return
 	}
