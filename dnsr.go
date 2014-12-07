@@ -141,13 +141,15 @@ func (r *Resolver) exchange(success chan<- bool, c chan<- *RR, host string, qnam
 			continue
 		}
 
+		// FIXME: cache NXDOMAIN responses responsibly
+		if rmsg.Rcode == dns.RcodeNameError {
+			r.cacheAdd(qname, nil)
+		}
+
 		// If successful, cache the results and return
 		r.saveDNSRR(rmsg.Answer...)
 		r.saveDNSRR(rmsg.Ns...)
 		r.saveDNSRR(rmsg.Extra...)
-		if rmsg.Rcode == dns.RcodeNameError {
-			r.cacheAdd(qname, nil) // FIXME: cache NXDOMAIN responses responsibly
-		}
 		success <- true
 		return
 	}
