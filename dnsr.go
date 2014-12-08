@@ -191,7 +191,10 @@ func toLowerFQDN(name string) string {
 }
 
 func logMaxRecursion(qname string, qtype string, depth int) {
-	fmt.Printf("%s Error: MAX RECURSION @ %s %s %d\n",
+	if DebugLogger == nil {
+		return
+	}
+	fmt.Fprintf(DebugLogger, "%s Error: MAX RECURSION @ %s %s %d\n",
 		strings.Repeat("│   ", depth-1), qname, qtype, depth)
 }
 
