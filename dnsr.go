@@ -11,25 +11,13 @@ import (
 	"github.com/miekg/dns"
 )
 
-//go:generate sh generate.sh
-
 var (
-	Root           *Resolver
 	DebugLogger    io.Writer
 	Timeout        = 1000 * time.Millisecond
 	MaxRecursion   = 10
 	MaxNameservers = 2
 	MaxIPs         = 2
 )
-
-func init() {
-	Root = New(strings.Count(root, "\n"))
-	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
-		if t.Error == nil {
-			Root.saveDNSRR(t.RR)
-		}
-	}
-}
 
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
@@ -301,8 +289,8 @@ func (r *Resolver) cacheAdd(qname string, rr *RR) {
 // cacheGet returns a randomly ordered slice of DNS records.
 func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
 	e := r.getEntry(qname)
-	if e == nil && r != Root {
-		e = Root.getEntry(qname)
+	if e == nil && r != rootCache && rootCache != nil {
+		e = rootCache.getEntry(qname)
 	}
 	if e == nil {
 		return nil
