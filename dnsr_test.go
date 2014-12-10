@@ -24,7 +24,7 @@ func TestSimple(t *testing.T) {
 	r.Resolve("1.com", "")
 }
 
-func XTestCache(t *testing.T) {
+func TestCache(t *testing.T) {
 	r := New(5)
 	st.Expect(t, len(r.cache.entries), 0)
 	r.Resolve("1.com", "")

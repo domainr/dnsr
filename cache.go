@@ -3,8 +3,9 @@ package dnsr
 import "sync"
 
 type cache struct {
-	m       sync.RWMutex
-	entries map[string]entry
+	capacity int
+	m        sync.RWMutex
+	entries  map[string]entry
 }
 
 type entry struct {
@@ -18,25 +19,39 @@ func newCache(capacity int) *cache {
 		capacity = 10000
 	}
 	return &cache{
-		entries: make(map[string]entry, capacity),
+		capacity: capacity,
+		entries: make(map[string]entry),
 	}
 }
 
 // add adds 0 or more DNS records to the resolver cache for a specific
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
-// FIXME: evict entries once we exceed capacity
 func (c *cache) add(qname string, rr *RR) {
 	qname = toLowerFQDN(qname)
 	c.m.Lock()
 	defer c.m.Unlock()
 	e, ok := c.entries[qname]
 	if !ok {
+		c._evict()
 		e = entry{rrs: make(map[RR]struct{}, 0)}
 		c.entries[qname] = e
 	}
 	if rr != nil {
 		e.rrs[*rr] = struct{}{}
+	}
+}
+
+// FIXME: better random cache eviction than Go’s random key guarantee?
+func (c *cache) _evict() {
+	if len(c.entries) < c.capacity {
+		return
+	}
+	for k := range c.entries {
+		delete(c.entries, k)
+		if len(c.entries) < c.capacity {
+			return
+		}
 	}
 }
 
