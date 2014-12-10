@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/miekg/dns"
 )
 
@@ -20,23 +19,19 @@ var (
 
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
-	cache  *lru.Cache
+	cache  *cache
 	client *dns.Client
 }
 
-// New initializes a Resolver with the specified cache size. Cache size defaults to 10,000 if size <= 0.
-func New(size int) *Resolver {
-	if size <= 0 {
-		size = 10000
-	}
-	cache, _ := lru.New(size)
+// New initializes a Resolver with the specified cache size.
+func New(capacity int) *Resolver {
 	r := &Resolver{
+		cache: newCache(capacity),
 		client: &dns.Client{
 			DialTimeout:  Timeout,
 			ReadTimeout:  Timeout,
 			WriteTimeout: Timeout,
 		},
-		cache: cache,
 	}
 	return r
 }
@@ -130,7 +125,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 
 		// FIXME: cache NXDOMAIN responses responsibly
 		if rmsg.Rcode == dns.RcodeNameError {
-			r.cacheAdd(qname, nil)
+			r.cache.add(qname, nil)
 		}
 
 		// If successful, cache the results
@@ -158,7 +153,7 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 		}
 		logCNAME(depth, crr.String())
 		for _, rr := range r.resolve(crr.Value, qtype, depth) {
-			r.cacheAdd(qname, rr)
+			r.cache.add(qname, rr)
 			rrs = append(rrs, crr)
 		}
 	}
@@ -256,66 +251,30 @@ func convertRR(drr dns.RR) *RR {
 func (r *Resolver) saveDNSRR(drrs ...dns.RR) {
 	for _, drr := range drrs {
 		if rr := convertRR(drr); rr != nil {
-			r.cacheAdd(rr.Name, rr)
+			r.cache.add(rr.Name, rr)
 		}
-	}
-}
-
-// cacheAdd adds 0 or more DNS records to the resolver cache for a specific
-// domain name and record type. This ensures the cache entry exists, even
-// if empty, for NXDOMAIN responses.
-func (r *Resolver) cacheAdd(qname string, rr *RR) {
-	qname = toLowerFQDN(qname)
-	e := r.getEntry(qname)
-	if e == nil {
-		e = &entry{rrs: make(map[RR]struct{}, 0)}
-		e.m.Lock()
-		r.cache.Add(qname, e)
-	} else {
-		e.m.Lock()
-	}
-	defer e.m.Unlock()
-	if rr != nil {
-		e.rrs[*rr] = struct{}{}
 	}
 }
 
 // cacheGet returns a randomly ordered slice of DNS records.
 func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
-	e := r.getEntry(qname)
-	if e == nil && r != rootCache && rootCache != nil {
-		e = rootCache.getEntry(qname)
+	any := r.cache.get(qname)
+	if any == nil {
+		any = rootCache.get(qname)
 	}
-	if e == nil {
-		return nil
+	if any == nil || len(any) == 0 {
+		return any
 	}
-	e.m.RLock()
-	defer e.m.RUnlock()
-	if len(e.rrs) == 0 {
-		return []*RR{}
-	}
-	rrs := make([]*RR, 0, len(e.rrs))
-	for rr, _ := range e.rrs {
-		// fmt.Printf("%s\n", rr.String())
+	rrs := make([]*RR, 0, len(any))
+	i := 0
+	for _, rr := range any {
 		if qtype == "" || rr.Type == qtype {
-			rrs = append(rrs, &RR{rr.Name, rr.Type, rr.Value})
+			rrs[i] = rr
+			i++
 		}
 	}
 	if len(rrs) == 0 && (qtype != "" && qtype != "NS") {
 		return nil
 	}
 	return rrs
-}
-
-// getEntry returns a single cache entry or nil if an entry does not exist in the cache.
-func (r *Resolver) getEntry(qname string) *entry {
-	c, ok := r.cache.Get(qname)
-	if !ok {
-		return nil
-	}
-	e, ok := c.(*entry)
-	if !ok {
-		return nil
-	}
-	return e
 }

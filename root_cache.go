@@ -9,14 +9,17 @@ import (
 //go:generate sh generate.sh
 
 var (
-	rootCache *Resolver
+	rootCache *cache
 )
 
 func init() {
-	rootCache = New(strings.Count(root, "\n"))
+	rootCache = newCache(strings.Count(root, "\n"))
 	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
 		if t.Error == nil {
-			rootCache.saveDNSRR(t.RR)
+			continue
+		}
+		if rr := convertRR(t.RR); rr != nil {
+			rootCache.add(rr.Name, rr)
 		}
 	}
 }

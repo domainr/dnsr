@@ -3,19 +3,29 @@ package dnsr
 import "sync"
 
 type cache struct {
-	maxSize int
-	m       sync.RWMutex
-	entries map[string]entry
+	m        sync.RWMutex
+	entries  map[string]entry
 }
 
 type entry struct {
-	m   sync.RWMutex
 	rrs map[RR]struct{}
+}
+
+// newCache initializes and returns a new cache instance.
+// Capacity defaults to 10,000 if size <= 0.
+func newCache(capacity int) *cache {
+	if capacity <= 0 {
+		capacity = 10000
+	}
+	return &cache{
+		entries: make(map[string]entry, capacity),
+	}
 }
 
 // add adds 0 or more DNS records to the resolver cache for a specific
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
+// FIXME: evict entries once we exceed capacity
 func (c *cache) add(qname string, rrs ...*RR) {
 	qname = toLowerFQDN(qname)
 	c.m.Lock()
@@ -31,7 +41,7 @@ func (c *cache) add(qname string, rrs ...*RR) {
 }
 
 // get returns a randomly ordered slice of DNS records.
-func (c *cache) get(qname string, qtype string) []*RR {
+func (c *cache) get(qname string) []*RR {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	e, ok := c.entries[qname]
@@ -44,13 +54,8 @@ func (c *cache) get(qname string, qtype string) []*RR {
 	i := 0
 	rrs := make([]*RR, 0, len(e.rrs))
 	for rr, _ := range e.rrs {
-		if qtype == "" || rr.Type == qtype {
-			rrs[i] = &RR{rr.Name, rr.Type, rr.Value}
-			i++
-		}
-	}
-	if len(rrs) == 0 && (qtype != "" && qtype != "NS") {
-		return nil
+		rrs[i] = &RR{rr.Name, rr.Type, rr.Value} // Don’t return a pointer to a map key
+		i++
 	}
 	return rrs
 }
