@@ -266,11 +266,9 @@ func (r *Resolver) cacheGet(qname string, qtype string) []*RR {
 		return any
 	}
 	rrs := make([]*RR, 0, len(any))
-	i := 0
 	for _, rr := range any {
 		if qtype == "" || rr.Type == qtype {
-			rrs[i] = rr
-			i++
+			rrs = append(rrs, rr)
 		}
 	}
 	if len(rrs) == 0 && (qtype != "" && qtype != "NS") {

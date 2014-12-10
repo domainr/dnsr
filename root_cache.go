@@ -15,7 +15,7 @@ var (
 func init() {
 	rootCache = newCache(strings.Count(root, "\n"))
 	for t := range dns.ParseZone(strings.NewReader(root), "", "") {
-		if t.Error == nil {
+		if t.Error != nil {
 			continue
 		}
 		if rr := convertRR(t.RR); rr != nil {

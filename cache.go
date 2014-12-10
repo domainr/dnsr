@@ -3,8 +3,8 @@ package dnsr
 import "sync"
 
 type cache struct {
-	m        sync.RWMutex
-	entries  map[string]entry
+	m       sync.RWMutex
+	entries map[string]entry
 }
 
 type entry struct {
@@ -26,7 +26,7 @@ func newCache(capacity int) *cache {
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
 // FIXME: evict entries once we exceed capacity
-func (c *cache) add(qname string, rrs ...*RR) {
+func (c *cache) add(qname string, rr *RR) {
 	qname = toLowerFQDN(qname)
 	c.m.Lock()
 	defer c.m.Unlock()
@@ -35,7 +35,7 @@ func (c *cache) add(qname string, rrs ...*RR) {
 		e = entry{rrs: make(map[RR]struct{}, 0)}
 		c.entries[qname] = e
 	}
-	for _, rr := range rrs {
+	if rr != nil {
 		e.rrs[*rr] = struct{}{}
 	}
 }
@@ -52,7 +52,7 @@ func (c *cache) get(qname string) []*RR {
 		return []*RR{}
 	}
 	i := 0
-	rrs := make([]*RR, 0, len(e.rrs))
+	rrs := make([]*RR, len(e.rrs))
 	for rr, _ := range e.rrs {
 		rrs[i] = &RR{rr.Name, rr.Type, rr.Value} // Don’t return a pointer to a map key
 		i++
