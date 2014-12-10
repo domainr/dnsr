@@ -1,16 +1,12 @@
 package dnsr
 
 import (
-	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
 var (
-	DebugLogger    io.Writer
 	Timeout        = 1000 * time.Millisecond
 	MaxRecursion   = 10
 	MaxNameservers = 2
@@ -158,93 +154,6 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 		}
 	}
 	return rrs
-}
-
-func parent(name string) (string, bool) {
-	labels := dns.SplitDomainName(name)
-	if labels == nil {
-		return "", false
-	}
-	return toLowerFQDN(strings.Join(labels[1:], ".")), true
-}
-
-func toLowerFQDN(name string) string {
-	return dns.Fqdn(strings.ToLower(name))
-}
-
-func logMaxRecursion(qname string, qtype string, depth int) {
-	if DebugLogger == nil {
-		return
-	}
-	fmt.Fprintf(DebugLogger, "%s Error: MAX RECURSION @ %s %s %d\n",
-		strings.Repeat("│   ", depth-1), qname, qtype, depth)
-}
-
-func logResolveStart(qname string, qtype string, depth int) {
-	if DebugLogger == nil {
-		return
-	}
-	fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
-		strings.Repeat("│   ", depth-1), qname, qtype, depth)
-}
-
-func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
-	if DebugLogger == nil {
-		return
-	}
-	dur := time.Since(start)
-	fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
-		strings.Repeat("│   ", depth-1), dur/time.Millisecond, qname, qtype, depth)
-}
-
-func logCNAME(depth int, cname string) {
-	if DebugLogger == nil {
-		return
-	}
-	fmt.Fprintf(DebugLogger, "%s│    CNAME: %s\n", strings.Repeat("│   ", depth-1), cname)
-}
-
-func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err error) {
-	if DebugLogger == nil {
-		return
-	}
-	dur := time.Since(start)
-	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
-		strings.Repeat("│   ", depth-1), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
-	if err != nil {
-		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",
-			strings.Repeat("│   ", depth-1), dur/time.Millisecond, err.Error())
-	}
-}
-
-// RR represents a DNS resource record.
-type RR struct {
-	Name  string
-	Type  string
-	Value string
-}
-
-// String returns a string representation of an RR in zone-file format.
-func (rr *RR) String() string {
-	return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
-}
-
-func convertRR(drr dns.RR) *RR {
-	switch t := drr.(type) {
-	case *dns.NS:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.Ns}
-	case *dns.CNAME:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.Target}
-	case *dns.A:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.A.String()}
-	case *dns.AAAA:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.AAAA.String()}
-	case *dns.TXT:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], strings.Join(t.Txt, "\t")}
-	default:
-		// fmt.Printf("%s\n", drr.String())
-	}
-	return nil
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
