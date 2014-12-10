@@ -265,11 +265,6 @@ func convertRR(drr dns.RR) *RR {
 	return nil
 }
 
-type key struct {
-	Name string
-	Type string
-}
-
 type entry struct {
 	m   sync.RWMutex
 	rrs map[RR]struct{}
