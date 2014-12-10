@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
@@ -251,11 +250,6 @@ func convertRR(drr dns.RR) *RR {
 		// fmt.Printf("%s\n", drr.String())
 	}
 	return nil
-}
-
-type entry struct {
-	m   sync.RWMutex
-	rrs map[RR]struct{}
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
