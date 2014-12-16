@@ -93,5 +93,5 @@ func query(name, qtype string) {
 		color.Printf("@{r};; FALSE\t%s\t%s\n", name, qtype)
 	}
 
-	logV("@{.w};; Elapsed: %s\n", time.Since(start).String())
+	color.Printf("@{.w};; Elapsed: %s\n", time.Since(start).String())
 }

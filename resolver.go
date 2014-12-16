@@ -146,7 +146,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 		}
 
 		// Cache records returned
-		r.saveDNSRR(qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...)...)
+		r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...)...)
 
 		// Never block
 		select {
@@ -176,25 +176,17 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
-func (r *Resolver) saveDNSRR(qname string, drrs ...dns.RR) {
+func (r *Resolver) saveDNSRR(host string, qname string, drrs ...dns.RR) {
 	cl := dns.CountLabel(qname)
-	rrsByName := make(map[string][]*RR)
 	for _, drr := range drrs {
 		h := drr.Header()
-		if h.Rrtype == dns.TypeNS && dns.CountLabel(drr.Header().Name) < cl {
-			fmt.Fprintf(os.Stderr, "Warning: potential poisoning: %s -> %s\n", qname, drr.String())
+		if dns.CountLabel(h.Name) < cl {
+			fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
 			continue
 		}
-
-		rr := convertRR(drr)
-		if rr == nil {
-			continue
+		if rr := convertRR(drr); rr != nil {
+			r.cache.add(rr.Name, rr)
 		}
-
-		rrsByName[rr.Name] = append(rrsByName[rr.Name], rr)
-	}
-	for name, rrs := range rrsByName {
-		r.cache.add(name, rrs...)
 	}
 }
 
