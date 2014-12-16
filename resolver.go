@@ -3,7 +3,6 @@ package dnsr
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -146,8 +145,8 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 			r.cache.add(qname, nil)
 		}
 
-		// If successful, cache the results
-		r.saveDNSRR(host, qname, qtype, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...)...)
+		// Cache records returned
+		r.saveDNSRR(qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...)...)
 
 		// Never block
 		select {
@@ -163,9 +162,6 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 	rrs := []*RR{} // Return non-nil slice indicating difference between NXDOMAIN and an error
 	for _, crr := range r.cacheGet(qname, "") {
-		if strings.Contains(crr.Value, "root-servers.net.") {
-			fmt.Fprintf(os.Stderr, "Warning: caching CNAME for %s %s: %s\n", qname, qtype, crr.String())
-		}
 		rrs = append(rrs, crr)
 		if crr.Type != "CNAME" {
 			continue
@@ -180,14 +176,13 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
-func (r *Resolver) saveDNSRR(host string, qname string, qtype string, drrs ...dns.RR) {
+func (r *Resolver) saveDNSRR(qname string, drrs ...dns.RR) {
 	cl := dns.CountLabel(qname)
 	rrsByName := make(map[string][]*RR)
 	for _, drr := range drrs {
 		h := drr.Header()
 		if h.Rrtype == dns.TypeNS && dns.CountLabel(drr.Header().Name) < cl {
-			fmt.Fprintf(os.Stderr, "Warning: potential poisoning: dig +norecurse @%s %s %s -> %s\n",
-				host, qname, qtype, drr.String())
+			fmt.Fprintf(os.Stderr, "Warning: potential poisoning: %s -> %s\n", qname, drr.String())
 			continue
 		}
 
@@ -195,7 +190,7 @@ func (r *Resolver) saveDNSRR(host string, qname string, qtype string, drrs ...dn
 		if rr == nil {
 			continue
 		}
-		
+
 		rrsByName[rr.Name] = append(rrsByName[rr.Name], rr)
 	}
 	for name, rrs := range rrsByName {
