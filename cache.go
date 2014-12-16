@@ -12,25 +12,34 @@ type entry struct {
 	rrs map[RR]struct{}
 }
 
+const MinCacheCapacity = 1000
+
 // newCache initializes and returns a new cache instance.
-// Capacity defaults to 10,000 if size <= 0.
+// Cache capacity defaults to MinCacheCapacity if <= 0.
 func newCache(capacity int) *cache {
 	if capacity <= 0 {
-		capacity = 10000
+		capacity = MinCacheCapacity
 	}
 	return &cache{
 		capacity: capacity,
-		entries: make(map[string]entry),
+		entries:  make(map[string]entry),
 	}
 }
 
 // add adds 0 or more DNS records to the resolver cache for a specific
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
-func (c *cache) add(qname string, rr *RR) {
-	qname = toLowerFQDN(qname)
+func (c *cache) add(qname string, rrs ...*RR) {
+	qname = toLowerFQDN(qname) // FIXME: optimize this away
 	c.m.Lock()
 	defer c.m.Unlock()
+	for _, rr := range rrs {
+		c._add(qname, rr)
+	}
+}
+
+// _add does NOT lock the mutex so unsafe for concurrent usage.
+func (c *cache) _add(qname string, rr *RR) {
 	e, ok := c.entries[qname]
 	if !ok {
 		c._evict()

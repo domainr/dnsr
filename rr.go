@@ -21,15 +21,15 @@ func (rr *RR) String() string {
 func convertRR(drr dns.RR) *RR {
 	switch t := drr.(type) {
 	case *dns.NS:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.Ns}
+		return &RR{toLowerFQDN(t.Hdr.Name), dns.TypeToString[t.Hdr.Rrtype], toLowerFQDN(t.Ns)}
 	case *dns.CNAME:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.Target}
+		return &RR{toLowerFQDN(t.Hdr.Name), dns.TypeToString[t.Hdr.Rrtype], toLowerFQDN(t.Target)}
 	case *dns.A:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.A.String()}
+		return &RR{toLowerFQDN(t.Hdr.Name), dns.TypeToString[t.Hdr.Rrtype], t.A.String()}
 	case *dns.AAAA:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], t.AAAA.String()}
+		return &RR{toLowerFQDN(t.Hdr.Name), dns.TypeToString[t.Hdr.Rrtype], t.AAAA.String()}
 	case *dns.TXT:
-		return &RR{t.Hdr.Name, dns.TypeToString[t.Hdr.Rrtype], strings.Join(t.Txt, "\t")}
+		return &RR{toLowerFQDN(t.Hdr.Name), dns.TypeToString[t.Hdr.Rrtype], strings.Join(t.Txt, "\t")}
 	default:
 		// fmt.Printf("%s\n", drr.String())
 	}

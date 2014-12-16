@@ -50,7 +50,7 @@ func logExchange(host string, qmsg *dns.Msg, depth int, start time.Time, err err
 		return
 	}
 	dur := time.Since(start)
-	fmt.Fprintf(DebugLogger, "%s│    %dms: dig @%s %s %s\n",
+	fmt.Fprintf(DebugLogger, "%s│    %dms: dig +norecurse @%s %s %s\n",
 		strings.Repeat("│   ", depth-1), dur/time.Millisecond, host, qmsg.Question[0].Name, dns.TypeToString[qmsg.Question[0].Qtype])
 	if err != nil {
 		fmt.Fprintf(DebugLogger, "%s│    %dms: ERROR: %s\n",

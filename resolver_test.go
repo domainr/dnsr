@@ -2,6 +2,7 @@ package dnsr
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 
@@ -25,16 +26,15 @@ func TestSimple(t *testing.T) {
 }
 
 func TestCache(t *testing.T) {
-	r := New(5)
+	r := New(0)
+	r.cache.capacity = 10
 	st.Expect(t, len(r.cache.entries), 0)
-	r.Resolve("1.com", "")
-	r.Resolve("2.com", "")
-	r.Resolve("3.com", "")
-	r.Resolve("4.com", "")
-	r.Resolve("5.com", "")
-	st.Expect(t, len(r.cache.entries), 5)
-	_ = r.Resolve("6.com", "")
-	st.Expect(t, len(r.cache.entries), 5)
+	for i := 0; i < 10; i++ {
+		r.Resolve(fmt.Sprintf("%d.com", i), "")
+	}
+	st.Expect(t, len(r.cache.entries), 10)
+	r.Resolve("a.com", "")
+	st.Expect(t, len(r.cache.entries), 10)
 }
 
 func TestGoogleA(t *testing.T) {

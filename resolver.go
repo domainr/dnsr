@@ -1,6 +1,9 @@
 package dnsr
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/miekg/dns"
@@ -50,19 +53,32 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) []*RR {
 	}
 	logResolveStart(qname, qtype, depth)
 	defer logResolveEnd(qname, qtype, depth, time.Now())
-	return r.resolveNS(qname, qtype, depth)
+	return r.iterateParents(qname, qtype, depth)
 }
 
-func (r *Resolver) resolveNS(qname string, qtype string, depth int) []*RR {
+func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
 	success := make(chan bool, 1)
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
 			continue
 		}
 
-		// Query all DNS servers in parallel
+		if dns.CountLabel(qname) >= 2 && pname == "." {
+			fmt.Fprintf(os.Stderr, "Warning: non-TLD query at root: dig +norecurse %s %s\n", qname, qtype)
+			return nil
+		}
+
+		// Get nameservers
+		nrrs := r.resolve(pname, "NS", depth)
+
+		// Short circuit on error (e.g. MaxRecursion)
+		if nrrs == nil {
+			return nil // FIXME: use an error instead of nil
+		}
+
+		// Query all nameservers in parallel
 		count := 0
-		for _, nrr := range r.resolve(pname, "NS", depth) {
+		for _, nrr := range nrrs {
 			if qtype != "" { // Early out for specific queries
 				if rrs := r.cacheGet(qname, qtype); rrs != nil {
 					return rrs
@@ -74,6 +90,7 @@ func (r *Resolver) resolveNS(qname string, qtype string, depth int) []*RR {
 			if count++; count > MaxNameservers {
 				break
 			}
+
 			go r.exchange(success, nrr.Value, qname, qtype, depth)
 		}
 
@@ -85,6 +102,11 @@ func (r *Resolver) resolveNS(qname string, qtype string, depth int) []*RR {
 			case <-time.After(Timeout):
 				continue
 			}
+		}
+
+		// NS queries naturally recurse, so stop further iteration
+		if qtype == "NS" {
+			return []*RR{}
 		}
 	}
 	return nil
@@ -125,9 +147,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 		}
 
 		// If successful, cache the results
-		r.saveDNSRR(rmsg.Answer...)
-		r.saveDNSRR(rmsg.Ns...)
-		r.saveDNSRR(rmsg.Extra...)
+		r.saveDNSRR(host, qname, qtype, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...)...)
 
 		// Never block
 		select {
@@ -143,6 +163,9 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 	rrs := []*RR{} // Return non-nil slice indicating difference between NXDOMAIN and an error
 	for _, crr := range r.cacheGet(qname, "") {
+		if strings.Contains(crr.Value, "root-servers.net.") {
+			fmt.Fprintf(os.Stderr, "Warning: caching CNAME for %s %s: %s\n", qname, qtype, crr.String())
+		}
 		rrs = append(rrs, crr)
 		if crr.Type != "CNAME" {
 			continue
@@ -157,11 +180,26 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
-func (r *Resolver) saveDNSRR(drrs ...dns.RR) {
+func (r *Resolver) saveDNSRR(host string, qname string, qtype string, drrs ...dns.RR) {
+	cl := dns.CountLabel(qname)
+	rrsByName := make(map[string][]*RR)
 	for _, drr := range drrs {
-		if rr := convertRR(drr); rr != nil {
-			r.cache.add(rr.Name, rr)
+		h := drr.Header()
+		if h.Rrtype == dns.TypeNS && dns.CountLabel(drr.Header().Name) < cl {
+			fmt.Fprintf(os.Stderr, "Warning: potential poisoning: dig +norecurse @%s %s %s -> %s\n",
+				host, qname, qtype, drr.String())
+			continue
 		}
+
+		rr := convertRR(drr)
+		if rr == nil {
+			continue
+		}
+		
+		rrsByName[rr.Name] = append(rrsByName[rr.Name], rr)
+	}
+	for name, rrs := range rrsByName {
+		r.cache.add(name, rrs...)
 	}
 }
 
