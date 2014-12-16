@@ -62,8 +62,9 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
 			continue
 		}
 
-		if dns.CountLabel(qname) >= 2 && pname == "." {
-			fmt.Fprintf(os.Stderr, "Warning: non-TLD query at root: dig +norecurse %s %s\n", qname, qtype)
+		// Only query TLDs against the root nameservers
+		if pname == "." && dns.CountLabel(qname) >= 2 {
+			// fmt.Fprintf(os.Stderr, "Warning: non-TLD query at root: dig +norecurse %s %s\n", qname, qtype)
 			return nil
 		}
 
