@@ -25,7 +25,7 @@ func logResolveStart(qname string, qtype string, depth int) {
 	if DebugLogger == nil {
 		return
 	}
-	fmt.Fprintf(DebugLogger, "%s┌─── resolve(\"%s\", \"%s\", %d)\n",
+	fmt.Fprintf(DebugLogger, "%s╭─── resolve(\"%s\", \"%s\", %d)\n",
 		strings.Repeat("│   ", depth-1), qname, qtype, depth)
 }
 
@@ -34,7 +34,7 @@ func logResolveEnd(qname string, qtype string, depth int, start time.Time) {
 		return
 	}
 	dur := time.Since(start)
-	fmt.Fprintf(DebugLogger, "%s└─── %dms: resolve(\"%s\", \"%s\", %d)\n",
+	fmt.Fprintf(DebugLogger, "%s╰─── %dms: resolve(\"%s\", \"%s\", %d)\n",
 		strings.Repeat("│   ", depth-1), dur/time.Millisecond, qname, qtype, depth)
 }
 
