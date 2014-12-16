@@ -179,12 +179,11 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 func (r *Resolver) saveDNSRR(host string, qname string, drrs ...dns.RR) {
 	cl := dns.CountLabel(qname)
 	for _, drr := range drrs {
-		h := drr.Header()
-		if dns.CountLabel(h.Name) < cl {
-			fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
-			continue
-		}
 		if rr := convertRR(drr); rr != nil {
+			if dns.CountLabel(rr.Name) < cl && dns.CompareDomainName(qname, rr.Name) < 2 {
+				fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
+				continue
+			}
 			r.cache.add(rr.Name, rr)
 		}
 	}
