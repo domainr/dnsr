@@ -13,6 +13,14 @@ type RR struct {
 	Value string
 }
 
+// ICANN specifies that DNS servers should return the special value 127.0.53.53
+// for A record queries of TLDS that have recently entered the root zone,
+// that have a high likelyhood of colliding with private DNS names.
+// The record returned is a notices to network administrators to adjust their
+// DNS configuration.
+// https://www.icann.org/resources/pages/name-collision-2013-12-06-en#127.0.53.53
+const NameCollision = "127.0.53.53"
+
 // String returns a string representation of an RR in zone-file format.
 func (rr *RR) String() string {
 	return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
