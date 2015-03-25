@@ -1,8 +1,6 @@
 package dnsr
 
 import (
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/miekg/dns"
@@ -182,7 +180,7 @@ func (r *Resolver) saveDNSRR(host string, qname string, drrs ...dns.RR) {
 	for _, drr := range drrs {
 		if rr := convertRR(drr); rr != nil {
 			if dns.CountLabel(rr.Name) < cl && dns.CompareDomainName(qname, rr.Name) < 2 {
-				fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
+				// fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
 				continue
 			}
 			r.cache.add(rr.Name, rr)
