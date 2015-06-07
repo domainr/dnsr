@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"code.google.com/p/go.net/idna"
 	"github.com/domainr/dnsr"
 	"github.com/miekg/dns"
 	"github.com/wsxiaoys/terminal/color"
+	"golang.org/x/net/idna"
 )
 
 const (
