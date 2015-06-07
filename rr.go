@@ -14,7 +14,7 @@ type RR struct {
 }
 
 // ICANN specifies that DNS servers should return the special value 127.0.53.53
-// for A record queries of TLDS that have recently entered the root zone,
+// for A record queries of TLDs that have recently entered the root zone,
 // that have a high likelyhood of colliding with private DNS names.
 // The record returned is a notices to network administrators to adjust their
 // DNS configuration.
