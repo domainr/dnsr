@@ -1,4 +1,7 @@
-# dnsr [![GoDoc](https://godoc.org/github.com/domainr/dnsr?status.png)](https://godoc.org/github.com/domainr/dnsr) ![Project Status](http://img.shields.io/badge/status-development-red.svg)
+# dnsr
+
+[![build status](https://img.shields.io/circleci/project/domainr/dnsr/master.svg)](https://circleci.com/gh/domainr/dnsr)
+[![godoc](http://img.shields.io/badge/docs-GoDoc-blue.svg)](https://godoc.org/github.com/domainr/dnsr)
 
 `go get github.com/domainr/dnsr`
 
@@ -32,4 +35,4 @@ Run `go generate` in Go 1.4+ to refresh the [root zone hint file](http://www.int
 
 ## Copyright
 
-© 2014 nb.io, LLC
+© 2014–2015 nb.io, LLC
