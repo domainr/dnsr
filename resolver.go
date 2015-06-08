@@ -45,12 +45,14 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) []*RR {
 		return nil
 	}
 	qname = toLowerFQDN(qname)
-	if rrs := r.cacheGet(qname, qtype); rrs != nil {
+	rrs := r.cacheGet(qname, qtype)
+	if rrs != nil {
 		return rrs
 	}
 	logResolveStart(qname, qtype, depth)
-	defer logResolveEnd(qname, qtype, depth, time.Now())
-	return r.iterateParents(qname, qtype, depth)
+	rrs = r.iterateParents(qname, qtype, depth)
+	logResolveEnd(qname, qtype, rrs, depth, time.Now())
+	return rrs
 }
 
 func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
@@ -134,7 +136,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 		// Synchronously query this DNS server
 		start := time.Now()
 		rmsg, _, err := r.client.Exchange(qmsg, rr.Value+":53")
-		logExchange(rr.Value, qmsg, depth, start, err)
+		logExchange(host, qmsg, depth, start, err) // Log hostname instead of IP
 		if err != nil {
 			continue
 		}
@@ -165,7 +167,7 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 		if crr.Type != "CNAME" {
 			continue
 		}
-		logCNAME(depth, crr.String())
+		logCNAME(crr.String(), depth)
 		for _, rr := range r.resolve(crr.Value, qtype, depth) {
 			r.cache.add(qname, rr)
 			rrs = append(rrs, crr)
