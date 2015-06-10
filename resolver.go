@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	Timeout        = 1000 * time.Millisecond
+	Timeout        = 2000 * time.Millisecond
 	MaxRecursion   = 10
 	MaxNameservers = 2
 	MaxIPs         = 2
