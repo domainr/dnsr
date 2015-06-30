@@ -14,7 +14,6 @@ var (
 	MaxIPs         = 2
 
 	ErrMaxRecursion = fmt.Errorf("maximum recursion depth reached: %d", MaxRecursion)
-	ErrNonTLD       = fmt.Errorf("non-TLD query at root")
 	ErrNoResponse   = fmt.Errorf("no responses received")
 )
 
@@ -77,7 +76,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 		// Only query TLDs against the root nameservers
 		if pname == "." && dns.CountLabel(qname) >= 2 {
 			// fmt.Fprintf(os.Stderr, "Warning: non-TLD query at root: dig +norecurse %s %s\n", qname, qtype)
-			return nil, ErrNonTLD
+			return nil, nil
 		}
 
 		// Get nameservers
