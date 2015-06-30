@@ -23,7 +23,7 @@ func init() {
 func TestSimple(t *testing.T) {
 	r := New(0)
 	_, err := r.ResolveErr("1.com", "")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, NXDOMAIN)
 }
 
 func TestCache(t *testing.T) {
@@ -35,14 +35,14 @@ func TestCache(t *testing.T) {
 	}
 	st.Expect(t, len(r.cache.entries), 10)
 	_, err := r.ResolveErr("a.com", "")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, NXDOMAIN)
 	st.Expect(t, len(r.cache.entries), 10)
 }
 
 func TestGoogleA(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "A")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
@@ -51,7 +51,7 @@ func TestGoogleA(t *testing.T) {
 func TestGoogleAny(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
@@ -60,9 +60,9 @@ func TestGoogleAny(t *testing.T) {
 func TestGoogleMulti(t *testing.T) {
 	r := New(0)
 	_, err := r.ResolveErr("google.com", "A")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	rrs, err := r.ResolveErr("google.com", "TXT")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 5, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
@@ -71,7 +71,7 @@ func TestGoogleMulti(t *testing.T) {
 func TestGoogleTXT(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "TXT")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs), 5)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
 }
@@ -79,23 +79,23 @@ func TestGoogleTXT(t *testing.T) {
 func TestHerokuA(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "A")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestHerokuTXT(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "TXT")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
 }
 
 func TestHerokuMulti(t *testing.T) {
 	r := New(0)
 	_, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "A")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "TXT")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
@@ -103,7 +103,7 @@ func TestHerokuMulti(t *testing.T) {
 func TestBlueOvenA(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("blueoven.com", "A")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs), 2)
 	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
 }
@@ -111,7 +111,7 @@ func TestBlueOvenA(t *testing.T) {
 func TestBlueOvenAny(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("blueoven.com", "")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs), 2)
 	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
 }
@@ -119,11 +119,11 @@ func TestBlueOvenAny(t *testing.T) {
 func TestBlueOvenMulti(t *testing.T) {
 	r := New(0)
 	_, err := r.ResolveErr("blueoven.com", "A")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	_, err = r.ResolveErr("blueoven.com", "TXT")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	rrs, err := r.ResolveErr("blueoven.com", "")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs), 2)
 	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
 }
@@ -131,7 +131,7 @@ func TestBlueOvenMulti(t *testing.T) {
 func TestBazCoUKAny(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("baz.co.uk", "")
-	st.Assert(t, err, nil)
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 }

@@ -43,7 +43,12 @@ func (c *cache) _add(qname string, rr *RR) {
 	e, ok := c.entries[qname]
 	if !ok {
 		c._evict()
-		e = entry{rrs: make(map[RR]struct{}, 0)}
+		// For NXDOMAIN responses,
+		// the cache entry is present, but nil.
+		c.entries[qname] = entry{}
+	}
+	if e.rrs == nil && rr != nil {
+		e.rrs = make(map[RR]struct{}, 0)
 		c.entries[qname] = e
 	}
 	if rr != nil {
@@ -73,7 +78,7 @@ func (c *cache) get(qname string) []*RR {
 		return nil
 	}
 	if len(e.rrs) == 0 {
-		return []*RR{}
+		return emptyRRs
 	}
 	i := 0
 	rrs := make([]*RR, len(e.rrs))
