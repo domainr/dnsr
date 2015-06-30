@@ -183,10 +183,7 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) ([]*RR, 
 			continue
 		}
 		logCNAME(crr.String(), depth)
-		crrs, err := r.resolve(crr.Value, qtype, depth)
-		if err != nil {
-			return nil, err
-		}
+		crrs, _ := r.resolve(crr.Value, qtype, depth)
 		for _, rr := range crrs {
 			r.cache.add(qname, rr)
 			rrs = append(rrs, crr)
