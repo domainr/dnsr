@@ -12,10 +12,6 @@ import (
 	"golang.org/x/net/idna"
 )
 
-const (
-	timeout = 2000 * time.Millisecond
-)
-
 var (
 	verbose  bool
 	resolver = dnsr.New(10000)
@@ -64,7 +60,9 @@ func main() {
 		}(name, qtype)
 	}
 	wg.Wait()
-	logV("\n@{w};; Total elapsed: %s\n", time.Since(start).String())
+	if len(args) > 1 {
+		color.Printf("\n@{.w};; Total elapsed: %s\n", time.Since(start).String())
+	}
 }
 
 func query(name, qtype string) {
@@ -75,7 +73,7 @@ func query(name, qtype string) {
 		os.Exit(1)
 	}
 
-	rrs := resolver.Resolve(qname, qtype)
+	rrs, err := resolver.ResolveErr(qname, qtype)
 
 	color.Printf("\n")
 	if len(rrs) > 0 {
@@ -85,7 +83,9 @@ func query(name, qtype string) {
 		color.Printf("@{g}%s\n", rr.String())
 	}
 
-	if rrs == nil {
+	if err != nil {
+		color.Printf("@{r};; %s\t%s\t%s\n", err, name, qtype)
+	} else if rrs == nil {
 		color.Printf("@{y};; NIL\t%s\t%s\n", name, qtype)
 	} else if len(rrs) > 0 {
 		color.Printf("@{g};; TRUE\t%s\t%s\n", name, qtype)
