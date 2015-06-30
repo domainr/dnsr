@@ -77,7 +77,7 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) ([]*RR, error)
 	}
 	logResolveStart(qname, qtype, depth)
 	rrs, err = r.iterateParents(qname, qtype, depth)
-	logResolveEnd(qname, qtype, rrs, depth, time.Now())
+	logResolveEnd(qname, qtype, rrs, depth, time.Now(), err)
 	return rrs, err
 }
 

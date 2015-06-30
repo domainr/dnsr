@@ -29,7 +29,7 @@ func logResolveStart(qname string, qtype string, depth int) {
 		strings.Repeat("│   ", depth-1), qname, qtype, depth)
 }
 
-func logResolveEnd(qname string, qtype string, rrs []*RR, depth int, start time.Time) {
+func logResolveEnd(qname string, qtype string, rrs []*RR, depth int, start time.Time, err error) {
 	if DebugLogger == nil {
 		return
 	}
@@ -41,6 +41,9 @@ func logResolveEnd(qname string, qtype string, rrs []*RR, depth int, start time.
 		for _, rr := range rrs {
 			fmt.Fprintf(DebugLogger, "%s:%s ", rr.Type, rr.Value)
 		}
+	}
+	if err != nil {
+		fmt.Fprintf(DebugLogger, " # ERROR: %s", err)
 	}
 	fmt.Fprintf(DebugLogger, "\n")
 }

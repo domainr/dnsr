@@ -34,8 +34,10 @@ func TestCache(t *testing.T) {
 		r.Resolve(fmt.Sprintf("%d.com", i), "")
 	}
 	st.Expect(t, len(r.cache.entries), 10)
-	_, err := r.ResolveErr("a.com", "")
+	DebugLogger = os.Stderr
+	rrs, err := r.ResolveErr("a.com", "")
 	st.Expect(t, err, NXDOMAIN)
+	st.Expect(t, len(rrs), 0)
 	st.Expect(t, len(r.cache.entries), 10)
 }
 
