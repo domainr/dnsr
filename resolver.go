@@ -1,6 +1,7 @@
 package dnsr
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/miekg/dns"
@@ -11,6 +12,10 @@ var (
 	MaxRecursion   = 10
 	MaxNameservers = 2
 	MaxIPs         = 2
+
+	ErrMaxRecursion = fmt.Errorf("maximum recursion depth reached: %d", MaxRecursion)
+	ErrNonTLD       = fmt.Errorf("non-TLD query at root")
+	ErrNoResponse   = fmt.Errorf("no responses received")
 )
 
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
@@ -36,26 +41,33 @@ func New(capacity int) *Resolver {
 // For nonexistent domains (where a DNS server will return NXDOMAIN), it will return an empty, non-nil slice.
 // Specify an empty string in qtype to receive any DNS records found (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) []*RR {
-	return r.resolve(qname, qtype, 0)
-}
-
-func (r *Resolver) resolve(qname string, qtype string, depth int) []*RR {
-	if depth++; depth > MaxRecursion {
-		logMaxRecursion(qname, qtype, depth)
+	rrs, err := r.resolve(qname, qtype, 0)
+	if err != nil {
 		return nil
 	}
-	qname = toLowerFQDN(qname)
-	rrs := r.cacheGet(qname, qtype)
-	if rrs != nil {
-		return rrs
-	}
-	logResolveStart(qname, qtype, depth)
-	rrs = r.iterateParents(qname, qtype, depth)
-	logResolveEnd(qname, qtype, rrs, depth, time.Now())
 	return rrs
 }
 
-func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
+func (r *Resolver) ResolveErr(qname string, qtype string) ([]*RR, error) {
+	return r.resolve(qname, qtype, 0)
+}
+
+func (r *Resolver) resolve(qname string, qtype string, depth int) ([]*RR, error) {
+	if depth++; depth > MaxRecursion {
+		logMaxRecursion(qname, qtype, depth)
+		return nil, ErrMaxRecursion
+	}
+	qname = toLowerFQDN(qname)
+	if rrs := r.cacheGet(qname, qtype); rrs != nil {
+		return rrs, nil
+	}
+	logResolveStart(qname, qtype, depth)
+	rrs, err := r.iterateParents(qname, qtype, depth)
+	logResolveEnd(qname, qtype, rrs, depth, time.Now())
+	return rrs, err
+}
+
+func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR, error) {
 	success := make(chan bool, 1)
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
@@ -65,15 +77,13 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
 		// Only query TLDs against the root nameservers
 		if pname == "." && dns.CountLabel(qname) >= 2 {
 			// fmt.Fprintf(os.Stderr, "Warning: non-TLD query at root: dig +norecurse %s %s\n", qname, qtype)
-			return nil
+			return nil, ErrNonTLD
 		}
 
 		// Get nameservers
-		nrrs := r.resolve(pname, "NS", depth)
-
-		// Short circuit on error (e.g. MaxRecursion)
-		if nrrs == nil {
-			return nil // FIXME: use an error instead of nil
+		nrrs, err := r.resolve(pname, "NS", depth)
+		if err != nil {
+			return nil, err
 		}
 
 		// Query all nameservers in parallel
@@ -81,7 +91,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
 		for _, nrr := range nrrs {
 			if qtype != "" { // Early out for specific queries
 				if rrs := r.cacheGet(qname, qtype); rrs != nil {
-					return rrs
+					return rrs, nil
 				}
 			}
 			if nrr.Type != "NS" {
@@ -100,16 +110,17 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) []*RR {
 			case <-success:
 				return r.resolveCNAMEs(qname, qtype, depth)
 			case <-time.After(Timeout):
+				// FIXME: can we cancel r.exchange goroutines at this timeout?
 				continue
 			}
 		}
 
 		// NS queries naturally recurse, so stop further iteration
 		if qtype == "NS" {
-			return []*RR{}
+			return []*RR{}, nil
 		}
 	}
-	return nil
+	return nil, ErrNoResponse
 }
 
 func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtype string, depth int) {
@@ -123,7 +134,11 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 
 	// Find each A record for the DNS server
 	count := 0
-	for _, rr := range r.resolve(host, "A", depth) {
+	rrs, err := r.resolve(host, "A", depth)
+	if err != nil {
+		return
+	}
+	for _, rr := range rrs {
 		if rr.Type != "A" { // FIXME: support AAAA records?
 			continue
 		}
@@ -160,7 +175,7 @@ func (r *Resolver) exchange(success chan<- bool, host string, qname string, qtyp
 	}
 }
 
-func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
+func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) ([]*RR, error) {
 	rrs := []*RR{} // Return non-nil slice indicating difference between NXDOMAIN and an error
 	for _, crr := range r.cacheGet(qname, "") {
 		rrs = append(rrs, crr)
@@ -168,12 +183,16 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) []*RR {
 			continue
 		}
 		logCNAME(crr.String(), depth)
-		for _, rr := range r.resolve(crr.Value, qtype, depth) {
+		crrs, err := r.resolve(crr.Value, qtype, depth)
+		if err != nil {
+			return nil, err
+		}
+		for _, rr := range crrs {
 			r.cache.add(qname, rr)
 			rrs = append(rrs, crr)
 		}
 	}
-	return rrs
+	return rrs, nil
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
