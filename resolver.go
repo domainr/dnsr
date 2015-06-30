@@ -96,8 +96,11 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 
 		// Get nameservers
 		nrrs, err := r.resolve(pname, "NS", depth)
-		if err != nil {
+		if err == NXDOMAIN {
 			return nil, err
+		}
+		if err != nil {
+			continue
 		}
 
 		// Early out for specific queries
@@ -118,9 +121,9 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 				continue
 			}
 
-			go func() {
+			go func(nrr *RR) {
 				errs <- r.exchange(nrr.Value, qname, qtype, depth)
-			}()
+			}(nrr)
 
 			count++
 			if count >= MaxNameservers {
@@ -146,6 +149,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 			return nil, err
 		}
 	}
+
 	return nil, ErrNoResponse
 }
 
