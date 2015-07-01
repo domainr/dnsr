@@ -76,8 +76,9 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) ([]*RR, error)
 		return rrs, nil
 	}
 	logResolveStart(qname, qtype, depth)
+	start := time.Now()
 	rrs, err = r.iterateParents(qname, qtype, depth)
-	logResolveEnd(qname, qtype, rrs, depth, time.Now(), err)
+	logResolveEnd(qname, qtype, rrs, depth, start, err)
 	return rrs, err
 }
 
@@ -181,7 +182,7 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 		// Synchronously query this DNS server
 		start := time.Now()
 		rmsg, _, err := r.client.Exchange(qmsg, rr.Value+":53")
-		logExchange(host, qmsg, depth, start, err) // Log hostname instead of IP
+		logExchange(host, qmsg, rmsg, depth, start, err) // Log hostname instead of IP
 		if err != nil {
 			continue
 		}
