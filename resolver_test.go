@@ -22,7 +22,8 @@ func init() {
 
 func TestSimple(t *testing.T) {
 	r := New(0)
-	r.Resolve("1.com", "")
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, NXDOMAIN)
 }
 
 func TestCache(t *testing.T) {
@@ -33,14 +34,18 @@ func TestCache(t *testing.T) {
 		r.Resolve(fmt.Sprintf("%d.com", i), "")
 	}
 	st.Expect(t, len(r.cache.entries), 10)
-	r.Resolve("a.com", "")
+	rrs, err := r.ResolveErr("a.com", "")
+	st.Expect(t, err, NXDOMAIN)
+	st.Expect(t, rrs, (RRs)(nil))
+	st.Expect(t, r.cache.entries["a.com"].rrs, map[RR]struct{}(nil))
+	st.Expect(t, len(rrs), 0)
 	st.Expect(t, len(r.cache.entries), 10)
 }
 
 func TestGoogleA(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("google.com", "A")
-	st.Refute(t, rrs, nil)
+	rrs, err := r.ResolveErr("google.com", "A")
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
@@ -48,84 +53,90 @@ func TestGoogleA(t *testing.T) {
 
 func TestGoogleAny(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("google.com", "")
-	st.Refute(t, rrs, nil)
-	st.Expect(t, len(rrs) >= 4, true)
+	rrs, err := r.ResolveErr("google.com", "")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 1, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestGoogleMulti(t *testing.T) {
 	r := New(0)
-	r.Resolve("google.com", "A")
-	rrs := r.Resolve("google.com", "TXT")
-	st.Refute(t, rrs, nil)
-	st.Expect(t, len(rrs) >= 5, true)
+	_, err := r.ResolveErr("google.com", "A")
+	st.Expect(t, err, nil)
+	rrs, err := r.ResolveErr("google.com", "TXT")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 1, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 0)
 }
 
 func TestGoogleTXT(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("google.com", "TXT")
-	st.Refute(t, rrs, nil)
-	st.Expect(t, len(rrs), 5)
+	rrs, err := r.ResolveErr("google.com", "TXT")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
 }
 
 func TestHerokuA(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("us-east-1-a.route.herokuapp.com", "A")
-	st.Refute(t, rrs, nil)
+	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "A")
+	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestHerokuTXT(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("us-east-1-a.route.herokuapp.com", "TXT")
-	st.Refute(t, rrs, nil)
+	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "TXT")
+	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
 }
 
 func TestHerokuMulti(t *testing.T) {
 	r := New(0)
-	r.Resolve("us-east-1-a.route.herokuapp.com", "A")
-	rrs := r.Resolve("us-east-1-a.route.herokuapp.com", "TXT")
-	st.Refute(t, rrs, nil)
+	_, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "A")
+	st.Expect(t, err, nil)
+	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "TXT")
+	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 0)
 }
 
 func TestBlueOvenA(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("blueoven.com", "A")
-	st.Refute(t, rrs, nil)
-	st.Expect(t, len(rrs), 2)
-	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
+	rrs, err := r.ResolveErr("blueoven.com", "A")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs), 4)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 2)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 2)
 }
 
 func TestBlueOvenAny(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("blueoven.com", "")
-	st.Refute(t, rrs, nil)
-	st.Expect(t, len(rrs), 2)
-	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
+	rrs, err := r.ResolveErr("blueoven.com", "")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs), 4)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 2)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 2)
 }
 
 func TestBlueOvenMulti(t *testing.T) {
 	r := New(0)
-	r.Resolve("blueoven.com", "A")
-	r.Resolve("blueoven.com", "TXT")
-	rrs := r.Resolve("blueoven.com", "")
-	st.Refute(t, rrs, nil)
+	_, err := r.ResolveErr("blueoven.com", "A")
+	st.Expect(t, err, nil)
+	_, err = r.ResolveErr("blueoven.com", "TXT")
+	st.Expect(t, err, nil)
+	rrs, err := r.ResolveErr("blueoven.com", "")
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs), 2)
 	st.Expect(t, all(rrs, func(rr *RR) bool { return rr.Type == "NS" }), true)
 }
 
 func TestBazCoUKAny(t *testing.T) {
 	r := New(0)
-	rrs := r.Resolve("baz.co.uk", "")
-	st.Refute(t, rrs, nil)
+	rrs, err := r.ResolveErr("baz.co.uk", "")
+	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 2, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
 }
@@ -136,6 +147,12 @@ func BenchmarkResolve(b *testing.B) {
 	}
 }
 
+func BenchmarkResolveErr(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		testResolveErr()
+	}
+}
+
 func testResolve() {
 	testResolver.Resolve("google.com", "")
 	testResolver.Resolve("blueoven.com", "")
@@ -143,7 +160,14 @@ func testResolve() {
 	testResolver.Resolve("us-east-1-a.route.herokuapp.com", "")
 }
 
-func count(rrs []*RR, f func(*RR) bool) (out int) {
+func testResolveErr() {
+	testResolver.ResolveErr("google.com", "")
+	testResolver.ResolveErr("blueoven.com", "")
+	testResolver.ResolveErr("baz.co.uk", "")
+	testResolver.ResolveErr("us-east-1-a.route.herokuapp.com", "")
+}
+
+func count(rrs RRs, f func(*RR) bool) (out int) {
 	for _, rr := range rrs {
 		if f(rr) {
 			out++
@@ -152,14 +176,14 @@ func count(rrs []*RR, f func(*RR) bool) (out int) {
 	return
 }
 
-func sum(rrs []*RR, f func(*RR) int) (out int) {
+func sum(rrs RRs, f func(*RR) int) (out int) {
 	for _, rr := range rrs {
 		out += f(rr)
 	}
 	return
 }
 
-func all(rrs []*RR, f func(*RR) bool) (out bool) {
+func all(rrs RRs, f func(*RR) bool) (out bool) {
 	for _, rr := range rrs {
 		if !f(rr) {
 			return false
