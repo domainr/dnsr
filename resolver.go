@@ -1,6 +1,7 @@
 package dnsr
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -191,6 +192,8 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 		if rmsg.Rcode == dns.RcodeNameError {
 			r.cache.add(qname, nil)
 			return NXDOMAIN
+		} else if rmsg.Rcode != dns.RcodeSuccess {
+			return errors.New(dns.RcodeToString[rmsg.Rcode])
 		}
 
 		// Cache records returned
