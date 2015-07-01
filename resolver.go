@@ -84,7 +84,8 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) ([]*RR, error)
 }
 
 func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR, error) {
-	errs := make(chan error, MaxNameservers)
+	chanRRs := make(chan []*RR, MaxNameservers)
+	chanErrs := make(chan error, MaxNameservers)
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		if pname == qname && qtype == "NS" { // If we’re looking for [foo.com,NS], then skip to [com,NS]
 			continue
@@ -124,7 +125,12 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 			}
 
 			go func(nrr *RR) {
-				errs <- r.exchange(nrr.Value, qname, qtype, depth)
+				rrs, err := r.exchange(nrr.Value, qname, qtype, depth)
+				if err != nil {
+					chanErrs <- err
+				} else {
+					chanRRs <- rrs
+				}
 			}(nrr)
 
 			count++
@@ -136,12 +142,13 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 		// Wait for first response
 		for ; count > 0; count-- {
 			select {
-			case err = <-errs:
+			case rrs := <-chanRRs:
+				if len(rrs) > 0 {
+					return r.resolveCNAMEs(qname, qtype, depth)
+				}
+			case err = <-chanErrs:
 				if err == NXDOMAIN {
 					return nil, err
-				}
-				if err == nil {
-					return r.resolveCNAMEs(qname, qtype, depth)
 				}
 			}
 		}
@@ -155,7 +162,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 	return nil, ErrNoResponse
 }
 
-func (r *Resolver) exchange(host string, qname string, qtype string, depth int) error {
+func (r *Resolver) exchange(host string, qname string, qtype string, depth int) ([]*RR, error) {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
 		dtype = dns.TypeA
@@ -166,23 +173,23 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 
 	// Find each A record for the DNS server
 	count := 0
-	rrs, err := r.resolve(host, "A", depth)
+	arrs, err := r.resolve(host, "A", depth)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, rr := range rrs {
-		if rr.Type != "A" { // FIXME: support AAAA records?
+	for _, arr := range arrs {
+		if arr.Type != "A" { // FIXME: support AAAA records?
 			continue
 		}
 
 		// Never query more than MaxIPs for any nameserver
 		if count++; count > MaxIPs {
-			return ErrMaxIPs
+			return nil, ErrMaxIPs
 		}
 
 		// Synchronously query this DNS server
 		start := time.Now()
-		rmsg, _, err := r.client.Exchange(qmsg, rr.Value+":53")
+		rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
 		logExchange(host, qmsg, rmsg, depth, start, err) // Log hostname instead of IP
 		if err != nil {
 			continue
@@ -191,19 +198,19 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 		// FIXME: cache NXDOMAIN responses responsibly
 		if rmsg.Rcode == dns.RcodeNameError {
 			r.cache.add(qname, nil)
-			return NXDOMAIN
+			return nil, NXDOMAIN
 		} else if rmsg.Rcode != dns.RcodeSuccess {
-			return errors.New(dns.RcodeToString[rmsg.Rcode])
+			return nil, errors.New(dns.RcodeToString[rmsg.Rcode])
 		}
 
 		// Cache records returned
-		r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...)...)
+		rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
 
 		// Return after first successful network request
-		return nil
+		return rrs, nil
 	}
 
-	return ErrNoARecords
+	return nil, ErrNoARecords
 }
 
 func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) ([]*RR, error) {
@@ -228,17 +235,22 @@ func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) ([]*RR, 
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
-func (r *Resolver) saveDNSRR(host string, qname string, drrs ...dns.RR) {
+func (r *Resolver) saveDNSRR(host string, qname string, drrs []dns.RR) []*RR {
+	var rrs []*RR
 	cl := dns.CountLabel(qname)
 	for _, drr := range drrs {
-		if rr := convertRR(drr); rr != nil {
-			if dns.CountLabel(rr.Name) < cl && dns.CompareDomainName(qname, rr.Name) < 2 {
-				// fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
-				continue
-			}
-			r.cache.add(rr.Name, rr)
+		rr := convertRR(drr)
+		if rr == nil {
+			continue
 		}
+		if dns.CountLabel(rr.Name) < cl && dns.CompareDomainName(qname, rr.Name) < 2 {
+			// fmt.Fprintf(os.Stderr, "Warning: potential poisoning from %s: %s -> %s\n", host, qname, drr.String())
+			continue
+		}
+		r.cache.add(rr.Name, rr)
+		rrs = append(rrs, rr)
 	}
+	return rrs
 }
 
 // cacheGet returns a randomly ordered slice of DNS records.
