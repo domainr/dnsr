@@ -144,7 +144,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 			select {
 			case rrs := <-chanRRs:
 				if len(rrs) > 0 {
-					return r.resolveCNAMEs(qname, qtype, depth)
+					return r.resolveCNAMEs(qname, qtype, rrs, depth)
 				}
 			case err = <-chanErrs:
 				if err == NXDOMAIN {
@@ -213,13 +213,12 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 	return nil, ErrNoARecords
 }
 
-func (r *Resolver) resolveCNAMEs(qname string, qtype string, depth int) ([]*RR, error) {
-	crrs, err := r.cacheGet(qname, "")
-	if err != nil {
-		return nil, err
-	}
+func (r *Resolver) resolveCNAMEs(qname string, qtype string, crrs []*RR, depth int) ([]*RR, error) {
 	var rrs []*RR
 	for _, crr := range crrs {
+		if crr.Name != qname {
+			continue
+		}
 		rrs = append(rrs, crr)
 		if crr.Type != "CNAME" {
 			continue

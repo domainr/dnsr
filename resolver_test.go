@@ -46,18 +46,18 @@ func TestGoogleA(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 4, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
+	st.Expect(t, len(rrs), 1)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 0)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 1)
 }
 
 func TestGoogleAny(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 4, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }) >= 2, true)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
+	st.Expect(t, len(rrs) >= 1, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 0)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 1)
 }
 
 func TestGoogleMulti(t *testing.T) {
@@ -66,16 +66,16 @@ func TestGoogleMulti(t *testing.T) {
 	st.Expect(t, err, nil)
 	rrs, err := r.ResolveErr("google.com", "TXT")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 5, true)
+	st.Expect(t, len(rrs) >= 1, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 0)
 }
 
 func TestGoogleTXT(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "TXT")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs), 5)
+	st.Expect(t, len(rrs), 1)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 1)
 }
 
@@ -100,7 +100,7 @@ func TestHerokuMulti(t *testing.T) {
 	rrs, err := r.ResolveErr("us-east-1-a.route.herokuapp.com", "TXT")
 	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "TXT" }), 0)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 0)
 }
 
 func TestBlueOvenA(t *testing.T) {
