@@ -46,9 +46,9 @@ func TestGoogleA(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs), 1)
+	st.Expect(t, len(rrs) >= 1, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 0)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 1)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestGoogleAny(t *testing.T) {
@@ -57,7 +57,7 @@ func TestGoogleAny(t *testing.T) {
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 1, true)
 	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "NS" }), 0)
-	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }), 1)
+	st.Expect(t, count(rrs, func(rr *RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
 func TestGoogleMulti(t *testing.T) {
