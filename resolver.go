@@ -143,9 +143,12 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) ([]*RR,
 		for ; count > 0; count-- {
 			select {
 			case rrs := <-chanRRs:
-				if len(rrs) > 0 {
-					return r.resolveCNAMEs(qname, qtype, rrs, depth)
+				for _, nrr := range nrrs {
+					if nrr.Name == qname {
+						rrs = append(rrs, nrr)
+					}
 				}
+				return r.resolveCNAMEs(qname, qtype, rrs, depth)
 			case err = <-chanErrs:
 				if err == NXDOMAIN {
 					return nil, err
