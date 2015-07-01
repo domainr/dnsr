@@ -216,11 +216,8 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 func (r *Resolver) resolveCNAMEs(qname string, qtype string, crrs []*RR, depth int) ([]*RR, error) {
 	var rrs []*RR
 	for _, crr := range crrs {
-		if crr.Name != qname {
-			continue
-		}
 		rrs = append(rrs, crr)
-		if crr.Type != "CNAME" {
+		if crr.Type != "CNAME" || crr.Name != qname {
 			continue
 		}
 		logCNAME(crr.String(), depth)
