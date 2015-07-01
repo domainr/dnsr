@@ -13,9 +13,11 @@ type RR struct {
 	Value string
 }
 
+type RRs []*RR
+
 // emptyRRs is an empty, non-nil slice of RRs.
 // It is used to save allocations at runtime.
-var emptyRRs = []*RR{}
+var emptyRRs = RRs{}
 
 // ICANN specifies that DNS servers should return the special value 127.0.53.53
 // for A record queries of TLDs that have recently entered the root zone,

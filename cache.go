@@ -70,7 +70,7 @@ func (c *cache) _evict() {
 }
 
 // get returns a randomly ordered slice of DNS records.
-func (c *cache) get(qname string) []*RR {
+func (c *cache) get(qname string) RRs {
 	c.m.RLock()
 	defer c.m.RUnlock()
 	e, ok := c.entries[qname]
@@ -81,7 +81,7 @@ func (c *cache) get(qname string) []*RR {
 		return emptyRRs
 	}
 	i := 0
-	rrs := make([]*RR, len(e.rrs))
+	rrs := make(RRs, len(e.rrs))
 	for rr, _ := range e.rrs {
 		rrs[i] = &RR{rr.Name, rr.Type, rr.Value} // Don’t return a pointer to a map key
 		i++

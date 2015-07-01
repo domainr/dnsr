@@ -29,7 +29,7 @@ func logResolveStart(qname string, qtype string, depth int) {
 		strings.Repeat("│   ", depth-1), qname, qtype, depth)
 }
 
-func logResolveEnd(qname string, qtype string, rrs []*RR, depth int, start time.Time, err error) {
+func logResolveEnd(qname string, qtype string, rrs RRs, depth int, start time.Time, err error) {
 	if DebugLogger == nil {
 		return
 	}

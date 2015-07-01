@@ -36,7 +36,7 @@ func TestCache(t *testing.T) {
 	st.Expect(t, len(r.cache.entries), 10)
 	rrs, err := r.ResolveErr("a.com", "")
 	st.Expect(t, err, NXDOMAIN)
-	st.Expect(t, rrs, ([]*RR)(nil))
+	st.Expect(t, rrs, (RRs)(nil))
 	st.Expect(t, r.cache.entries["a.com"].rrs, map[RR]struct{}(nil))
 	st.Expect(t, len(rrs), 0)
 	st.Expect(t, len(r.cache.entries), 10)
@@ -167,7 +167,7 @@ func testResolveErr() {
 	testResolver.ResolveErr("us-east-1-a.route.herokuapp.com", "")
 }
 
-func count(rrs []*RR, f func(*RR) bool) (out int) {
+func count(rrs RRs, f func(*RR) bool) (out int) {
 	for _, rr := range rrs {
 		if f(rr) {
 			out++
@@ -176,14 +176,14 @@ func count(rrs []*RR, f func(*RR) bool) (out int) {
 	return
 }
 
-func sum(rrs []*RR, f func(*RR) int) (out int) {
+func sum(rrs RRs, f func(*RR) int) (out int) {
 	for _, rr := range rrs {
 		out += f(rr)
 	}
 	return
 }
 
-func all(rrs []*RR, f func(*RR) bool) (out bool) {
+func all(rrs RRs, f func(*RR) bool) (out bool) {
 	for _, rr := range rrs {
 		if !f(rr) {
 			return false
