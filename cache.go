@@ -8,9 +8,7 @@ type cache struct {
 	entries  map[string]entry
 }
 
-type entry struct {
-	rrs map[RR]struct{}
-}
+type entry map[RR]struct{}
 
 const MinCacheCapacity = 1000
 
@@ -29,34 +27,47 @@ func newCache(capacity int) *cache {
 // add adds 0 or more DNS records to the resolver cache for a specific
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
-func (c *cache) add(qname string, rrs ...*RR) {
+func (c *cache) add(qname string, rr RR) {
 	qname = toLowerFQDN(qname) // FIXME: optimize this away
 	c.m.Lock()
 	defer c.m.Unlock()
-	for _, rr := range rrs {
-		c._add(qname, rr)
-	}
+	c._add(qname, rr)
+}
+
+// addNX adds an NXDOMAIN to the cache.
+// Safe for concurrent usage.
+func (c *cache) addNX(qname string) {
+	qname = toLowerFQDN(qname) // FIXME: optimize this away
+	c.m.Lock()
+	defer c.m.Unlock()
+	c._addEntry(qname)
 }
 
 // _add does NOT lock the mutex so unsafe for concurrent usage.
-func (c *cache) _add(qname string, rr *RR) {
+func (c *cache) _add(qname string, rr RR) {
 	e, ok := c.entries[qname]
+	if !ok {
+		c._evict()
+		c.entries[qname] = make(map[RR]struct{})
+		e = c.entries[qname]
+	}
+	e[rr] = struct{}{}
+}
+
+// addEntry adds an entry for qname to c.
+// Not safe for concurrent usage.
+func (c *cache) _addEntry(qname string) {
+	_, ok := c.entries[qname]
 	if !ok {
 		c._evict()
 		// For NXDOMAIN responses,
 		// the cache entry is present, but nil.
-		c.entries[qname] = entry{}
-	}
-	if e.rrs == nil && rr != nil {
-		e.rrs = make(map[RR]struct{}, 0)
-		c.entries[qname] = e
-	}
-	if rr != nil {
-		e.rrs[*rr] = struct{}{}
+		c.entries[qname] = nil
 	}
 }
 
 // FIXME: better random cache eviction than Go’s random key guarantee?
+// Not safe for concurrent usage.
 func (c *cache) _evict() {
 	if len(c.entries) < c.capacity {
 		return
@@ -77,13 +88,13 @@ func (c *cache) get(qname string) RRs {
 	if !ok {
 		return nil
 	}
-	if len(e.rrs) == 0 {
+	if len(e) == 0 {
 		return emptyRRs
 	}
 	i := 0
-	rrs := make(RRs, len(e.rrs))
-	for rr, _ := range e.rrs {
-		rrs[i] = &RR{rr.Name, rr.Type, rr.Value} // Don’t return a pointer to a map key
+	rrs := make(RRs, len(e))
+	for rr, _ := range e {
+		rrs[i] = rr
 		i++
 	}
 	return rrs

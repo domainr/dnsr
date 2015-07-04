@@ -45,7 +45,7 @@ func New(capacity int) *Resolver {
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) RRs {
-	rrs, err := r.resolve(qname, qtype, 0)
+	rrs, err := r.resolve(toLowerFQDN(qname), qtype, 0)
 	if err == NXDOMAIN {
 		return emptyRRs
 	}
@@ -60,7 +60,7 @@ func (r *Resolver) Resolve(qname string, qtype string) RRs {
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, and TXT).
 func (r *Resolver) ResolveErr(qname string, qtype string) (RRs, error) {
-	return r.resolve(qname, qtype, 0)
+	return r.resolve(toLowerFQDN(qname), qtype, 0)
 }
 
 func (r *Resolver) resolve(qname string, qtype string, depth int) (RRs, error) {
@@ -68,7 +68,6 @@ func (r *Resolver) resolve(qname string, qtype string, depth int) (RRs, error) {
 		logMaxRecursion(qname, qtype, depth)
 		return nil, ErrMaxRecursion
 	}
-	qname = toLowerFQDN(qname)
 	rrs, err := r.cacheGet(qname, qtype)
 	if err != nil {
 		return nil, err
@@ -124,14 +123,14 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int) (RRs, e
 				continue
 			}
 
-			go func(nrr *RR) {
-				rrs, err := r.exchange(nrr.Value, qname, qtype, depth)
+			go func(host string) {
+				rrs, err := r.exchange(host, qname, qtype, depth)
 				if err != nil {
 					chanErrs <- err
 				} else {
 					chanRRs <- rrs
 				}
-			}(nrr)
+			}(nrr.Value)
 
 			count++
 			if count >= MaxNameservers {
@@ -200,7 +199,7 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 
 		// FIXME: cache NXDOMAIN responses responsibly
 		if rmsg.Rcode == dns.RcodeNameError {
-			r.cache.add(qname, nil)
+			r.cache.addNX(qname)
 			return nil, NXDOMAIN
 		} else if rmsg.Rcode != dns.RcodeSuccess {
 			return nil, errors.New(dns.RcodeToString[rmsg.Rcode])
@@ -238,8 +237,8 @@ func (r *Resolver) saveDNSRR(host string, qname string, drrs []dns.RR) RRs {
 	var rrs RRs
 	cl := dns.CountLabel(qname)
 	for _, drr := range drrs {
-		rr := convertRR(drr)
-		if rr == nil {
+		rr, ok := convertRR(drr)
+		if !ok {
 			continue
 		}
 		if dns.CountLabel(rr.Name) < cl && dns.CompareDomainName(qname, rr.Name) < 2 {
