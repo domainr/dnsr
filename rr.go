@@ -33,27 +33,22 @@ func (rr *RR) String() string {
 }
 
 // convertRR converts a dns.RR to an RR.
+// If the RR is not a type that this package uses,
+// it returns an undefined RR and false.
 func convertRR(drr dns.RR) (RR, bool) {
-	h := drr.Header()
-	rr := RR{
-		Name: toLowerFQDN(h.Name),
-		Type: dns.TypeToString[h.Rrtype],
-	}
 	switch t := drr.(type) {
 	// case *dns.SOA:
 	// 	rr.Value = toLowerFQDN(t.String())
 	case *dns.NS:
-		rr.Value = toLowerFQDN(t.Ns)
+		return RR{toLowerFQDN(t.Hdr.Name), "NS", toLowerFQDN(t.Ns)}, true
 	case *dns.CNAME:
-		rr.Value = toLowerFQDN(t.Target)
+		return RR{toLowerFQDN(t.Hdr.Name), "CNAME", toLowerFQDN(t.Target)}, true
 	case *dns.A:
-		rr.Value = t.A.String()
+		return RR{toLowerFQDN(t.Hdr.Name), "A", t.A.String()}, true
 	case *dns.AAAA:
-		rr.Value = t.AAAA.String()
+		return RR{toLowerFQDN(t.Hdr.Name), "AAAA", t.AAAA.String()}, true
 	case *dns.TXT:
-		rr.Value = strings.Join(t.Txt, "\t")
-	default:
-		return rr, false
+		return RR{toLowerFQDN(t.Hdr.Name), "TXT", strings.Join(t.Txt, "\t")}, true
 	}
-	return rr, true
+	return RR{}, false
 }
