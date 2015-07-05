@@ -26,7 +26,7 @@ func TestSimple(t *testing.T) {
 	st.Expect(t, err, NXDOMAIN)
 }
 
-func TestCache(t *testing.T) {
+func TestResolverCache(t *testing.T) {
 	r := New(0)
 	r.cache.capacity = 10
 	st.Expect(t, len(r.cache.entries), 0)

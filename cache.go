@@ -48,6 +48,8 @@ func (c *cache) _add(qname string, rr RR) {
 	e, ok := c.entries[qname]
 	if !ok {
 		c._evict()
+	}
+	if e == nil {
 		c.entries[qname] = make(map[RR]struct{})
 		e = c.entries[qname]
 	}
