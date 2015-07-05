@@ -28,7 +28,6 @@ func newCache(capacity int) *cache {
 // domain name and record type. This ensures the cache entry exists, even
 // if empty, for NXDOMAIN responses.
 func (c *cache) add(qname string, rr RR) {
-	qname = toLowerFQDN(qname) // FIXME: optimize this away
 	c.m.Lock()
 	defer c.m.Unlock()
 	c._add(qname, rr)
@@ -37,7 +36,6 @@ func (c *cache) add(qname string, rr RR) {
 // addNX adds an NXDOMAIN to the cache.
 // Safe for concurrent usage.
 func (c *cache) addNX(qname string) {
-	qname = toLowerFQDN(qname) // FIXME: optimize this away
 	c.m.Lock()
 	defer c.m.Unlock()
 	c._addEntry(qname)
