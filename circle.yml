@@ -8,5 +8,4 @@ test:
   ## Override test command for reporting
   override:
     - mkdir -p $CIRCLE_TEST_REPORTS/junit
-    # - "(set -o pipefail && go test ./... -v -race | go-junit-report -dir $CIRCLE_TEST_REPORTS/junit)"
-    - "(set -o pipefail && go test ./... -race | go-junit-report -dir $CIRCLE_TEST_REPORTS/junit)"
+    - "(set -o pipefail && go test ./... -v -race | go-junit-report -dir $CIRCLE_TEST_REPORTS/junit)"
