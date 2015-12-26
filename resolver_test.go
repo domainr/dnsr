@@ -29,17 +29,22 @@ func TestSimple(t *testing.T) {
 func TestResolverCache(t *testing.T) {
 	r := New(0)
 	r.cache.capacity = 10
+	r.cache.m.Lock()
 	st.Expect(t, len(r.cache.entries), 0)
+	r.cache.m.Unlock()
 	for i := 0; i < 10; i++ {
 		r.Resolve(fmt.Sprintf("%d.com", i), "")
 	}
+	r.cache.m.Lock()
 	st.Expect(t, len(r.cache.entries), 10)
+	r.cache.m.Unlock()
 	rrs, err := r.ResolveErr("a.com", "")
 	st.Expect(t, err, NXDOMAIN)
 	st.Expect(t, rrs, (RRs)(nil))
+	r.cache.m.Lock()
 	st.Expect(t, r.cache.entries["a.com"], entry(nil))
-	st.Expect(t, len(rrs), 0)
 	st.Expect(t, len(r.cache.entries), 10)
+	r.cache.m.Unlock()
 }
 
 func TestGoogleA(t *testing.T) {
