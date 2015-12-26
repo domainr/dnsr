@@ -107,18 +107,16 @@ func TestBlueOvenA(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("blueoven.com", "A")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs), 4)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }), 2)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }), 2)
+	st.Expect(t, len(rrs), 2)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" && rr.Name == "blueoven.com" }), 2)
 }
 
 func TestBlueOvenAny(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("blueoven.com", "")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs), 4)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }), 2)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }), 2)
+	st.Expect(t, len(rrs), 2)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" && rr.Name == "blueoven.com" }), 2)
 }
 
 func TestBlueOvenMulti(t *testing.T) {
