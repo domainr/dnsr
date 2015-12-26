@@ -246,6 +246,9 @@ func (r *Resolver) saveDNSRR(host string, qname string, drrs []dns.RR) RRs {
 			continue
 		}
 		r.cache.add(rr.Name, rr)
+		if rr.Name != qname {
+			continue
+		}
 		rrs = append(rrs, rr)
 	}
 	return rrs
