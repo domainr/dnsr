@@ -29,16 +29,16 @@ func newCache(capacity int) *cache {
 // if empty, for NXDOMAIN responses.
 func (c *cache) add(qname string, rr RR) {
 	c.m.Lock()
-	defer c.m.Unlock()
 	c._add(qname, rr)
+	c.m.Unlock()
 }
 
 // addNX adds an NXDOMAIN to the cache.
 // Safe for concurrent usage.
 func (c *cache) addNX(qname string) {
 	c.m.Lock()
-	defer c.m.Unlock()
 	c._addEntry(qname)
+	c.m.Unlock()
 }
 
 // _add does NOT lock the mutex so unsafe for concurrent usage.
@@ -93,7 +93,7 @@ func (c *cache) get(qname string) RRs {
 	}
 	i := 0
 	rrs := make(RRs, len(e))
-	for rr, _ := range e {
+	for rr := range e {
 		rrs[i] = rr
 		i++
 	}
