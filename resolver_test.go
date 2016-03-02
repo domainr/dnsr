@@ -38,8 +38,8 @@ func TestResolverCache(t *testing.T) {
 	st.Expect(t, err, NXDOMAIN)
 	st.Expect(t, rrs, (RRs)(nil))
 	r.cache.m.RLock()
+	defer r.cache.m.RUnlock()
 	st.Expect(t, r.cache.entries["a.com"], entry(nil))
-	r.cache.m.RUnlock()
 	st.Expect(t, len(rrs), 0)
 	st.Expect(t, len(r.cache.entries), 10)
 }
