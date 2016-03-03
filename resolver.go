@@ -24,18 +24,12 @@ var (
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
 	cache  *cache
-	client *dns.Client
 }
 
 // New initializes a Resolver with the specified cache size.
 func New(capacity int) *Resolver {
 	r := &Resolver{
 		cache: newCache(capacity),
-		client: &dns.Client{
-			DialTimeout:  Timeout,
-			ReadTimeout:  Timeout,
-			WriteTimeout: Timeout,
-		},
 	}
 	return r
 }
@@ -191,7 +185,7 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 
 		// Synchronously query this DNS server
 		start := time.Now()
-		rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
+		rmsg, err := individualExchange(qmsg, arr.Value+":53")
 		logExchange(host, qmsg, rmsg, depth, start, err) // Log hostname instead of IP
 		if err != nil {
 			continue
@@ -228,6 +222,40 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 	}
 
 	return nil, ErrNoARecords
+}
+
+// A custom version of dns.Client.Exchange() that allows setting an absolute
+// network deadline for all operations - dial, write and read
+func individualExchange(m *dns.Msg, a string) (r *dns.Msg, err error) {
+	deadline := time.Now().Add(Timeout)
+	var co *dns.Conn
+
+	co, err = dns.DialTimeout("udp", a, Timeout)
+	if err != nil {
+		return nil, err
+	}
+
+	defer co.Close()
+
+	co.SetWriteDeadline(deadline)
+	co.SetReadDeadline(deadline)
+
+	opt := m.IsEdns0()
+	// If EDNS0 is used use that for size.
+	if opt != nil && opt.UDPSize() >= dns.MinMsgSize {
+		co.UDPSize = opt.UDPSize()
+	}
+
+	if err = co.WriteMsg(m); err != nil {
+		return nil, err
+	}
+
+	r, err = co.ReadMsg()
+	if err == nil && r.Id != m.Id {
+		err = dns.ErrId
+	}
+
+	return r, err
 }
 
 func (r *Resolver) resolveCNAMEs(qname string, qtype string, crrs RRs, depth int) (RRs, error) {
