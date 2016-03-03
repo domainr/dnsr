@@ -37,8 +37,8 @@ func (rr *RR) String() string {
 // it returns an undefined RR and false.
 func convertRR(drr dns.RR) (RR, bool) {
 	switch t := drr.(type) {
-	// case *dns.SOA:
-	// 	rr.Value = toLowerFQDN(t.String())
+	case *dns.SOA:
+		return RR{toLowerFQDN(t.Hdr.Name), "SOA", toLowerFQDN(t.Ns)}, true
 	case *dns.NS:
 		return RR{toLowerFQDN(t.Hdr.Name), "NS", toLowerFQDN(t.Ns)}, true
 	case *dns.CNAME:

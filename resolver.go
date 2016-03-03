@@ -43,7 +43,7 @@ func New(capacity int) *Resolver {
 // Resolve finds DNS records of type qtype for the domain qname.
 // For nonexistent domains (NXDOMAIN), it will return an empty, non-nil slice.
 // Specify an empty string in qtype to receive any DNS records found
-// (currently A, AAAA, NS, CNAME, and TXT).
+// (currently A, AAAA, NS, CNAME, SOA, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) RRs {
 	rrs, err := r.resolve(toLowerFQDN(qname), qtype, 0)
 	if err == NXDOMAIN {
@@ -58,7 +58,7 @@ func (r *Resolver) Resolve(qname string, qtype string) RRs {
 // ResolveErr finds DNS records of type qtype for the domain qname.
 // For nonexistent domains, it will return an NXDOMAIN error.
 // Specify an empty string in qtype to receive any DNS records found
-// (currently A, AAAA, NS, CNAME, and TXT).
+// (currently A, AAAA, NS, CNAME, SOA, and TXT).
 func (r *Resolver) ResolveErr(qname string, qtype string) (RRs, error) {
 	return r.resolve(toLowerFQDN(qname), qtype, 0)
 }
@@ -199,8 +199,23 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int) 
 
 		// FIXME: cache NXDOMAIN responses responsibly
 		if rmsg.Rcode == dns.RcodeNameError {
-			r.cache.addNX(qname)
-			return nil, NXDOMAIN
+			var hasSOA bool
+			if qtype == "NS" {
+				for _, drr := range rmsg.Ns {
+					rr, ok := convertRR(drr)
+					if !ok {
+						continue
+					}
+					if rr.Type == "SOA" {
+						hasSOA = true
+						break
+					}
+				}
+			}
+			if !hasSOA {
+				r.cache.addNX(qname)
+				return nil, NXDOMAIN
+			}
 		} else if rmsg.Rcode != dns.RcodeSuccess {
 			return nil, errors.New(dns.RcodeToString[rmsg.Rcode])
 		}
