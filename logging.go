@@ -41,7 +41,7 @@ func logResolveEnd(qname string, qtype string, rrs RRs, depth int, start time.Ti
 	} else if len(rrs) > 0 {
 		fmt.Fprintf(DebugLogger, " # [%d]RR = ", len(rrs))
 		for _, rr := range rrs {
-			fmt.Fprintf(DebugLogger, "%s:%s ", rr.Type, rr.Value)
+			fmt.Fprintf(DebugLogger, "%s(%s)=%s ", rr.Type, rr.Name, rr.Value)
 		}
 	}
 	if err != nil {
