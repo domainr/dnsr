@@ -40,6 +40,14 @@ func New(capacity int) *Resolver {
 	return r
 }
 
+func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
+	r := &Resolver{
+		cache: newCache(capacity),
+		client: &dns.Client{Timeout: timeout},
+	}
+	return r
+}
+
 // Resolve finds DNS records of type qtype for the domain qname.
 // For nonexistent domains (NXDOMAIN), it will return an empty, non-nil slice.
 // Specify an empty string in qtype to receive any DNS records found
