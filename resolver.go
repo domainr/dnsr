@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/domainr/dns"
 )
 
 var (
@@ -36,6 +36,14 @@ func New(capacity int) *Resolver {
 			ReadTimeout:  Timeout,
 			WriteTimeout: Timeout,
 		},
+	}
+	return r
+}
+
+func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
+	r := &Resolver{
+		cache: newCache(capacity),
+		client: &dns.Client{Timeout: timeout},
 	}
 	return r
 }
