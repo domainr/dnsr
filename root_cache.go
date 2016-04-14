@@ -3,7 +3,7 @@ package dnsr
 import (
 	"strings"
 
-	"github.com/miekg/dns"
+	"github.com/domainr/dns"
 )
 
 //go:generate sh generate.sh

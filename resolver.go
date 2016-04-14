@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/miekg/dns"
+	"github.com/domainr/dns"
 )
 
 var (

@@ -3,7 +3,7 @@ package dnsr
 import (
 	"strings"
 
-	"github.com/miekg/dns"
+	"github.com/domainr/dns"
 )
 
 // RR represents a DNS resource record.
