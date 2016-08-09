@@ -146,7 +146,7 @@ func TestBazCoUKAny(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
 }
 
-func TestIterateParents(t *testing.T) {
+func xTestIterateParents(t *testing.T) {
 	r := New(0)
 	defer leaktest.Check(t)()
 	c := make(chan error, 1)
