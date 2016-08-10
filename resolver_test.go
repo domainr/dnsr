@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
-	"time"
 
-	"github.com/fortytw2/leaktest"
 	"github.com/nbio/st"
 )
 
@@ -144,22 +142,6 @@ func TestBazCoUKAny(t *testing.T) {
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 2, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
-}
-
-func xTestIterateParents(t *testing.T) {
-	r := New(0)
-	defer leaktest.Check(t)()
-	c := make(chan error, 1)
-	go func() {
-		_, err := r.iterateParents(toLowerFQDN("blocking.sucks"), "", 0)
-		c <- err
-	}()
-	select {
-	case err := <-c:
-		st.Expect(t, err, nil)
-	case <-time.After(3 * time.Second):
-		t.Error("iterateParents blocked over 3s")
-	}
 }
 
 func BenchmarkResolve(b *testing.B) {

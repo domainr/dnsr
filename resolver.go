@@ -135,6 +135,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int, done <-
 			go func(host string) {
 				rrs, err := r.exchange(host, qname, qtype, depth, done)
 				if err != nil {
+					// TODO: what about `done` here?
 					chanErrs <- err
 				} else {
 					chanRRs <- rrs
