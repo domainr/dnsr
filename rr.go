@@ -22,7 +22,7 @@ var emptyRRs = RRs{}
 // ICANN specifies that DNS servers should return the special value 127.0.53.53
 // for A record queries of TLDs that have recently entered the root zone,
 // that have a high likelyhood of colliding with private DNS names.
-// The record returned is a notices to network administrators to adjust their
+// The record returned is a notice to network administrators to adjust their
 // DNS configuration.
 // https://www.icann.org/resources/pages/name-collision-2013-12-06-en#127.0.53.53
 const NameCollision = "127.0.53.53"
