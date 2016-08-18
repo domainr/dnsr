@@ -42,7 +42,7 @@ func New(capacity int) *Resolver {
 
 func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
 	r := &Resolver{
-		cache: newCache(capacity),
+		cache:  newCache(capacity),
 		client: &dns.Client{Timeout: timeout},
 	}
 	return r
