@@ -30,12 +30,8 @@ type Resolver struct {
 // New initializes a Resolver with the specified cache size.
 func New(capacity int) *Resolver {
 	r := &Resolver{
-		cache: newCache(capacity),
-		client: &dns.Client{
-			DialTimeout:  Timeout,
-			ReadTimeout:  Timeout,
-			WriteTimeout: Timeout,
-		},
+		cache:  newCache(capacity),
+		client: &dns.Client{Timeout: Timeout},
 	}
 	return r
 }
