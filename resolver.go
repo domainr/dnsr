@@ -111,7 +111,7 @@ func (r *Resolver) iterateParents(qname string, qtype string, depth int, done <-
 			return nil, err
 		}
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		// Check cache for specific queries
@@ -206,7 +206,7 @@ func (r *Resolver) exchange(host string, qname string, qtype string, depth int, 
 		rmsg, _, err := r.client.Exchange(qmsg, arr.Value+":53")
 		logExchange(host, qmsg, rmsg, depth, start, err) // Log hostname instead of IP
 		if err != nil {
-			continue
+			return nil, err
 		}
 
 		// FIXME: cache NXDOMAIN responses responsibly
