@@ -1,29 +1,40 @@
 package dnsr
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/nbio/st"
 )
 
-var testResolver *Resolver
-
-func init() {
+func TestMain(m *testing.M) {
 	flag.Parse()
 	if testing.Verbose() {
 		DebugLogger = os.Stderr
 	}
-	testResolver = New(0)
-	testResolve()
+	os.Exit(m.Run())
 }
 
 func TestSimple(t *testing.T) {
 	r := New(0)
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, NXDOMAIN)
+}
+
+func TestTimeoutExpiration(t *testing.T) {
+	r := NewWithTimeout(0, 10*time.Millisecond)
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, ErrTimeout)
+}
+
+func TestDeadlineExceeded(t *testing.T) {
+	r := NewWithTimeout(0, 0)
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, context.DeadlineExceeded)
 }
 
 func TestResolverCache(t *testing.T) {
@@ -144,13 +155,17 @@ func TestBazCoUKAny(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
 }
 
+var testResolver *Resolver
+
 func BenchmarkResolve(b *testing.B) {
+	testResolver = New(0)
 	for i := 0; i < b.N; i++ {
 		testResolve()
 	}
 }
 
 func BenchmarkResolveErr(b *testing.B) {
+	testResolver = New(0)
 	for i := 0; i < b.N; i++ {
 		testResolveErr()
 	}
