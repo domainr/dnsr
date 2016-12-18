@@ -6,8 +6,6 @@ dependencies:
     - sudo tar -C /usr/local -xzf go.tar.gz
     - sudo chmod a+w /usr/local/go/src/
     - go version
-    - go get -u -t -d -v ./...
-    - go build -v
 
 test:
   pre:
