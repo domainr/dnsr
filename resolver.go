@@ -37,11 +37,7 @@ type Resolver struct {
 
 // New initializes a Resolver with the specified cache size.
 func New(capacity int) *Resolver {
-	r := &Resolver{
-		cache:   newCache(capacity),
-		timeout: Timeout,
-	}
-	return r
+	return NewWithTimeout(capacity, Timeout)
 }
 
 // NewWithTimeout initializes a Resolver with the specified cache size and resolution timeout.
@@ -58,9 +54,7 @@ func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, SOA, and TXT).
 func (r *Resolver) Resolve(qname string, qtype string) RRs {
-	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
-	defer cancel()
-	rrs, err := r.resolve(ctx, toLowerFQDN(qname), qtype, 0)
+	rrs, err := r.ResolveErr(qname, qtype)
 	if err == NXDOMAIN {
 		return emptyRRs
 	}
