@@ -210,7 +210,7 @@ func (r *Resolver) exchange(ctx context.Context, host string, qname string, qtyp
 
 		// Synchronously query this DNS server
 		start := time.Now()
-		timeout := Timeout
+		timeout := r.timeout // belt and suspenders, since ctx has a deadline from ResolveErr
 		if dl, ok := ctx.Deadline(); ok {
 			if start.After(dl.Add(-TypicalResponseTime)) { // bail if we can't finish in time (start is too close to deadline)
 				return nil, ErrTimeout
