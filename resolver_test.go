@@ -37,6 +37,16 @@ func TestDeadlineExceeded(t *testing.T) {
 	st.Expect(t, err, context.DeadlineExceeded)
 }
 
+func TestResolveCtx(t *testing.T) {
+	r := New(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	_, err := r.ResolveCtx(ctx, "1.com", "")
+	st.Expect(t, err, NXDOMAIN)
+	cancel()
+	_, err = r.ResolveCtx(ctx, "1.com", "")
+	st.Expect(t, err, context.Canceled)
+}
+
 func TestResolverCache(t *testing.T) {
 	r := New(0)
 	r.cache.capacity = 10
