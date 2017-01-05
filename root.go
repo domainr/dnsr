@@ -12,8 +12,8 @@ var root = `
 ;           on server           FTP.INTERNIC.NET
 ;       -OR-                    RS.INTERNIC.NET
 ;
-;       last update:    February 17, 2016
-;       related version of root zone:   2016021701
+;       last update:    October 20, 2016
+;       related version of root zone:   2016102001
 ;
 ; formerly NS.INTERNIC.NET
 ;
@@ -43,6 +43,7 @@ D.ROOT-SERVERS.NET.      3600000      AAAA  2001:500:2d::d
 ;
 .                        3600000      NS    E.ROOT-SERVERS.NET.
 E.ROOT-SERVERS.NET.      3600000      A     192.203.230.10
+E.ROOT-SERVERS.NET.      3600000      AAAA  2001:500:a8::e
 ;
 ; FORMERLY NS.ISC.ORG
 ;
@@ -54,6 +55,7 @@ F.ROOT-SERVERS.NET.      3600000      AAAA  2001:500:2f::f
 ;
 .                        3600000      NS    G.ROOT-SERVERS.NET.
 G.ROOT-SERVERS.NET.      3600000      A     192.112.36.4
+G.ROOT-SERVERS.NET.      3600000      AAAA  2001:500:12::d0d
 ;
 ; FORMERLY AOS.ARL.ARMY.MIL
 ;
@@ -83,7 +85,7 @@ K.ROOT-SERVERS.NET.      3600000      AAAA  2001:7fd::1
 ;
 .                        3600000      NS    L.ROOT-SERVERS.NET.
 L.ROOT-SERVERS.NET.      3600000      A     199.7.83.42
-L.ROOT-SERVERS.NET.      3600000      AAAA  2001:500:3::42
+L.ROOT-SERVERS.NET.      3600000      AAAA  2001:500:9f::42
 ;
 ; OPERATED BY WIDE
 ;
