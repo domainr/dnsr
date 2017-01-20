@@ -3,7 +3,7 @@ package dnsr
 import (
 	"strings"
 
-	"github.com/domainr/dns"
+	"github.com/miekg/dns"
 )
 
 func parent(name string) (string, bool) {

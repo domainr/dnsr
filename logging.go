@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/domainr/dns"
+	"github.com/miekg/dns"
 )
 
 // DebugLogger will receive writes of DNS resolution traces if not nil.

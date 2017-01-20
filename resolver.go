@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/domainr/dns"
+	"github.com/miekg/dns"
 )
 
 // DNS Resolution configuration.
