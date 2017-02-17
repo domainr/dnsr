@@ -1,4 +1,4 @@
-export GO_VERSION := 1.7.4
+export GO_VERSION := 1.8
 export GOROOT := /app/go
 export GOPATH := /app/go2
 export PATH := /app/go/bin:$(PATH)
