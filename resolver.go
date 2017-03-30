@@ -14,7 +14,7 @@ var (
 	Timeout             = 2000 * time.Millisecond
 	TypicalResponseTime = 100 * time.Millisecond
 	MaxRecursion        = 10
-	MaxNameservers      = 2
+	MaxNameservers      = 4
 	MaxIPs              = 2
 )
 
