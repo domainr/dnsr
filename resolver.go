@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/miekg/dns"
@@ -141,43 +142,44 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 		}
 
 		// Query all nameservers in parallel
-		count := 0
-		for _, nrr := range nrrs {
-			if nrr.Type != "NS" {
-				continue
-			}
-
-			go func(host string) {
-				rrs, err := r.exchange(ctx, host, qname, qtype, depth)
-				if err != nil {
-					chanErrs <- err
-				} else {
-					chanRRs <- rrs
+		if len(nrrs) > 0 {
+			count := 0
+			offset := rand.Intn(len(nrrs))
+			for i := 0; i < len(nrrs) && count < MaxNameservers; i++ {
+				nrr := nrrs[(offset+i)%len(nrrs)]
+				if nrr.Type != "NS" {
+					continue
 				}
-			}(nrr.Value)
 
-			count++
-			if count >= MaxNameservers {
-				break
-			}
-		}
-
-		// Wait for answer, error, or cancellation
-		for ; count > 0; count-- {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			case rrs := <-chanRRs:
-				for _, nrr := range nrrs {
-					if nrr.Name == qname {
-						rrs = append(rrs, nrr)
+				go func(host string) {
+					rrs, err := r.exchange(ctx, host, qname, qtype, depth)
+					if err != nil {
+						chanErrs <- err
+					} else {
+						chanRRs <- rrs
 					}
-				}
-				cancel() // stop any other work here before recursing
-				return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
-			case err = <-chanErrs:
-				if err == NXDOMAIN {
-					return nil, err
+				}(nrr.Value)
+
+				count++
+			}
+
+			// Wait for answer, error, or cancellation
+			for ; count > 0; count-- {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case rrs := <-chanRRs:
+					for _, nrr := range nrrs {
+						if nrr.Name == qname {
+							rrs = append(rrs, nrr)
+						}
+					}
+					cancel() // stop any other work here before recursing
+					return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
+				case err = <-chanErrs:
+					if err == NXDOMAIN {
+						return nil, err
+					}
 				}
 			}
 		}
