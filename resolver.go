@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/miekg/dns"
@@ -143,8 +142,8 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 
 		// Query all nameservers in parallel
 		if len(nrrs) > 0 {
+			offset := (time.Now().Nanosecond() >> 10) % len(nrrs) // Non-locking pseudo-random offset
 			count := 0
-			offset := rand.Intn(len(nrrs))
 			for i := 0; i < len(nrrs) && count < MaxNameservers; i++ {
 				nrr := nrrs[(offset+i)%len(nrrs)]
 				if nrr.Type != "NS" {
