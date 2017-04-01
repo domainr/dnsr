@@ -13,6 +13,7 @@ type RR struct {
 	Value string
 }
 
+// RRs represents a slice of DNS resource records.
 type RRs []RR
 
 // emptyRRs is an empty, non-nil slice of RRs.

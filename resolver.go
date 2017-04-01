@@ -141,46 +141,44 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 		}
 
 		// Query all nameservers in parallel
-		if len(nrrs) > 0 {
-			offset := (time.Now().Nanosecond() >> 10) % len(nrrs) // Non-locking pseudo-random offset
-			count := 0
-			for i := 0; i < len(nrrs) && count < MaxNameservers; i++ {
-				nrr := nrrs[(offset+i)%len(nrrs)]
-				if nrr.Type != "NS" {
-					continue
-				}
-
-				go func(host string) {
-					rrs, err := r.exchange(ctx, host, qname, qtype, depth)
-					if err != nil {
-						chanErrs <- err
-					} else {
-						chanRRs <- rrs
-					}
-				}(nrr.Value)
-
-				count++
+		count := 0
+		for i := 0; i < len(nrrs) && count < MaxNameservers; i++ {
+			nrr := nrrs[i]
+			if nrr.Type != "NS" {
+				continue
 			}
 
-			// Wait for answer, error, or cancellation
-			for ; count > 0; count-- {
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case rrs := <-chanRRs:
-					for _, nrr := range nrrs {
-						if nrr.Name == qname {
-							rrs = append(rrs, nrr)
-						}
-					}
-					cancel() // stop any other work here before recursing
-					return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
-				case err = <-chanErrs:
-					if err == NXDOMAIN {
-						return nil, err
+			go func(host string) {
+				rrs, err := r.exchange(ctx, host, qname, qtype, depth)
+				if err != nil {
+					chanErrs <- err
+				} else {
+					chanRRs <- rrs
+				}
+			}(nrr.Value)
+
+			count++
+		}
+
+		// Wait for answer, error, or cancellation
+		for ; count > 0; count-- {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case rrs := <-chanRRs:
+				for _, nrr := range nrrs {
+					if nrr.Name == qname {
+						rrs = append(rrs, nrr)
 					}
 				}
+				cancel() // stop any other work here before recursing
+				return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
+			case err = <-chanErrs:
+				if err == NXDOMAIN {
+					return nil, err
+				}
 			}
+
 		}
 
 		// NS queries naturally recurse, so stop further iteration
