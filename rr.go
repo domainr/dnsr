@@ -50,6 +50,11 @@ func convertRR(drr dns.RR) (RR, bool) {
 		return RR{toLowerFQDN(t.Hdr.Name), "AAAA", t.AAAA.String()}, true
 	case *dns.TXT:
 		return RR{toLowerFQDN(t.Hdr.Name), "TXT", strings.Join(t.Txt, "\t")}, true
+	default:
+		fields := strings.Fields(drr.String())
+		if len(fields) >= 4 {
+			return RR{toLowerFQDN(fields[0]), fields[3], strings.Join(fields[4:len(fields)], "\t")}, true
+		}
 	}
 	return RR{}, false
 }

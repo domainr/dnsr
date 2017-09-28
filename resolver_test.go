@@ -77,6 +77,24 @@ func TestGoogleA(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true)
 }
 
+func TestGooglePTR(t *testing.T) {
+	r := New(0)
+	rrs, err := r.ResolveErr("99.17.217.172.in-addr.arpa", "PTR")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 4, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "PTR" }) >= 1, true)
+}
+
+func TestGoogleMX(t *testing.T) {
+	r := New(0)
+	rrs, err := r.ResolveErr("google.com", "MX")
+	t.Errorf("rrs: %+v", rrs)
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 4, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "MX" }) >= 2, true)
+}
+
 func TestGoogleAny(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "")
