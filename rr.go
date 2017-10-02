@@ -35,7 +35,8 @@ func (rr *RR) String() string {
 
 // convertRR converts a dns.RR to an RR.
 // If the RR is not a type that this package uses,
-// it returns an undefined RR and false.
+// It will attempt to translate this if there are enough parameters
+// Should all maners of translation fail, it returns an undefined RR and false.
 func convertRR(drr dns.RR) (RR, bool) {
 	switch t := drr.(type) {
 	case *dns.SOA:
