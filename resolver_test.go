@@ -88,7 +88,6 @@ func TestGooglePTR(t *testing.T) {
 func TestGoogleMX(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "MX")
-	t.Errorf("rrs: %+v", rrs)
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
