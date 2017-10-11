@@ -35,7 +35,8 @@ func (rr *RR) String() string {
 
 // convertRR converts a dns.RR to an RR.
 // If the RR is not a type that this package uses,
-// it returns an undefined RR and false.
+// It will attempt to translate this if there are enough parameters
+// Should all translation fail, it returns an undefined RR and false.
 func convertRR(drr dns.RR) (RR, bool) {
 	switch t := drr.(type) {
 	case *dns.SOA:
@@ -50,6 +51,11 @@ func convertRR(drr dns.RR) (RR, bool) {
 		return RR{toLowerFQDN(t.Hdr.Name), "AAAA", t.AAAA.String()}, true
 	case *dns.TXT:
 		return RR{toLowerFQDN(t.Hdr.Name), "TXT", strings.Join(t.Txt, "\t")}, true
+	default:
+		fields := strings.Fields(drr.String())
+		if len(fields) >= 4 {
+			return RR{toLowerFQDN(fields[0]), fields[3], strings.Join(fields[4:], "\t")}, true
+		}
 	}
 	return RR{}, false
 }
