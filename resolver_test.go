@@ -110,7 +110,8 @@ func TestGoogleMulti(t *testing.T) {
 	rrs, err := r.ResolveErr("google.com", "TXT")
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 1, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "TXT" }), 1)
+	// Google will have at least an SPF record, but might transiently have verification records too.
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "TXT" }) >= 1, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }), 0)
 }
 
@@ -119,7 +120,8 @@ func TestGoogleTXT(t *testing.T) {
 	rrs, err := r.ResolveErr("google.com", "TXT")
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "TXT" }), 1)
+	// Google will have at least an SPF record, but might transiently have verification records too.
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "TXT" }) >= 1, true)
 }
 
 func TestHerokuA(t *testing.T) {
