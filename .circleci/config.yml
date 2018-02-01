@@ -1,0 +1,22 @@
+version: 2
+jobs:
+  build:
+    working_directory: /go/src/github.com/domainr/dnsr
+    docker:
+      - image: domainr/ci:latest
+    steps:
+      - checkout
+      - run:
+          name: go get
+          command: go get -t -d -v ./...
+      - run:
+          name: go build
+          command: go build -v
+      - run: mkdir -p ~/junit
+      - run:
+          name: Run unit tests
+          command: (set -o pipefail && go test -v ./... -race | go-junit-report > ~/junit/whois.xml)
+      - store_test_results:
+          path: ~/junit
+      - store_artifacts:
+          path: ~/junit
