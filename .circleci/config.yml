@@ -6,20 +6,14 @@ jobs:
       - image: domainr/ci:swan
     steps:
       - checkout
-      - run:
-          name: go get
-          command: go get -t -d -v ./...
-      - run:
-          name: go build
-          command: go build -v
+      - run: go get -t -d -v ./...
+      - run: go build -v
 
-      # Run Tests
+      # Run tests
       - run: mkdir -p test-results
-      - run:
-          name: Run Tests
-          command: |
-            trap "go-junit-report < test-results/go-test.log > test-results/go-test-report.xml" EXIT
-            go test -race ./... | tee test-results/go-test.log
+      - run: |
+          trap "go-junit-report < test-results/go-test.log > test-results/go-test-report.xml" EXIT
+          go test -v -race -bench . ./... | tee test-results/go-test.log
 
       # Report
       - store_test_results:
