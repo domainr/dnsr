@@ -26,22 +26,13 @@ jobs:
     working_directory: ~/go/src/github.com/domainr/dnsr
     docker:
       - image: domainr/ci:swan
-        environment:
-          GIT_AUTHOR_EMAIL: robot@domainr.com
-          GIT_AUTHOR_NAME: Domainr Robot
-          GIT_COMMITTER_EMAIL: robot@domainr.com
-          GIT_COMMITTER_NAME: Domainr Robot
     steps:
       - checkout
-      - run: go get -t -d ./...
-      - run: go generate
+      - run: go get -t -d -v ./...
+      - run: go generate -v -x
       - run: go test ./...
-      - run: |
-          git diff-index --quiet HEAD -- || (\
-            git add --all . && \
-            git commit -m "auto-update" && \
-            git push origin $CIRCLE_BRANCH \
-          )
+      - run: git add --all .
+      - run: when-git-dirty commit-and-push
 
 workflows:
   version: 2
@@ -50,7 +41,8 @@ workflows:
       - build
   scheduled_workflow:
     jobs:
-      - update
+      - update:
+          context: org-global
     triggers:
       # Circle operates in UTC. 12:13 AM PST is 8:13 AM UTC
       - schedule:
