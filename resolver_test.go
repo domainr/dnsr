@@ -149,6 +149,7 @@ func TestHerokuMulti(t *testing.T) {
 }
 
 func TestBlueOvenA(t *testing.T) {
+	t.Skip("DNS changed 2018-11, so disabling this.")
 	r := New(0)
 	rrs, err := r.ResolveErr("blueoven.com", "A")
 	st.Expect(t, err, nil)
@@ -157,6 +158,7 @@ func TestBlueOvenA(t *testing.T) {
 }
 
 func TestBlueOvenAny(t *testing.T) {
+	t.Skip("DNS changed 2018-11, so disabling this.")
 	r := New(0)
 	rrs, err := r.ResolveErr("blueoven.com", "")
 	st.Expect(t, err, nil)
@@ -165,6 +167,7 @@ func TestBlueOvenAny(t *testing.T) {
 }
 
 func TestBlueOvenMulti(t *testing.T) {
+	t.Skip("DNS changed 2018-11, so disabling this.")
 	r := New(0)
 	_, err := r.ResolveErr("blueoven.com", "A")
 	st.Expect(t, err, nil)
