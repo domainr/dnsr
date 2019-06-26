@@ -43,7 +43,7 @@ func New(capacity int) *Resolver {
 // NewWithTimeout initializes a Resolver with the specified cache size and resolution timeout.
 func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
 	r := &Resolver{
-		cache:   newCache(capacity),
+		cache:   newCache(capacity, false),
 		timeout: timeout,
 	}
 	return r
