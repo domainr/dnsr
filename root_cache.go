@@ -18,7 +18,7 @@ func init() {
 		if t.Error != nil {
 			continue
 		}
-		rr, ok := convertRR(t.RR)
+		rr, ok := convertRR(t.RR, false)
 		if ok {
 			rootCache.add(rr.Name, rr)
 		}
