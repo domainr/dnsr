@@ -13,7 +13,7 @@ type RR struct {
 	Name   string
 	Type   string
 	Value  string
-	Ttl    *time.Duration
+	TTL    *time.Duration
 	Expiry *time.Time
 }
 
@@ -34,10 +34,10 @@ const NameCollision = "127.0.53.53"
 
 // String returns a string representation of an RR in zone-file format.
 func (rr *RR) String() string {
-	if rr.Ttl == nil {
+	if rr.TTL == nil {
 		return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
 	} else {
-		ttl := ttlString(rr.Ttl)
+		ttl := ttlString(rr.TTL)
 		return rr.Name + "\t" + ttl + "\t" + rr.Type + "\t" + rr.Value
 	}
 }
