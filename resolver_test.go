@@ -193,7 +193,7 @@ func TestTTL(t *testing.T) {
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
 	rr := rrs[0]
-	st.Expect(t, rr.Expiry != emptyTime, true)
+	st.Expect(t, !rr.Expiry.IsZero(), true)
 }
 
 var testResolver *Resolver

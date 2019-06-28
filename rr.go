@@ -24,9 +24,6 @@ type RRs []RR
 // It is used to save allocations at runtime.
 var emptyRRs = RRs{}
 
-// emptyTime is used to detect an empty expiry time.
-var emptyTime = time.Time{}
-
 // ICANN specifies that DNS servers should return the special value 127.0.53.53
 // for A record queries of TLDs that have recently entered the root zone,
 // that have a high likelyhood of colliding with private DNS names.
@@ -37,7 +34,7 @@ const NameCollision = "127.0.53.53"
 
 // String returns a string representation of an RR in zone-file format.
 func (rr *RR) String() string {
-	if rr.Expiry == emptyTime {
+	if rr.Expiry.IsZero() {
 		return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
 	} else {
 		ttl := ttlString(rr.TTL)

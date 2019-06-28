@@ -101,7 +101,7 @@ func (c *cache) get(qname string) RRs {
 		rrs := make(RRs, len(e))
 		now := time.Now()
 		for rr, _ := range e {
-			if rr.Expiry != emptyTime && now.After(rr.Expiry) {
+			if !rr.Expiry.IsZero() && now.After(rr.Expiry) {
 				delete(e, rr)
 			} else {
 				rrs[i] = rr
