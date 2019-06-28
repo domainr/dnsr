@@ -13,8 +13,8 @@ type RR struct {
 	Name   string
 	Type   string
 	Value  string
-	TTL    *time.Duration
-	Expiry *time.Time
+	TTL    time.Duration
+	Expiry time.Time
 }
 
 // RRs represents a slice of DNS resource records.
@@ -23,6 +23,9 @@ type RRs []RR
 // emptyRRs is an empty, non-nil slice of RRs.
 // It is used to save allocations at runtime.
 var emptyRRs = RRs{}
+
+// emptyTime is used to detect an empty expiry time.
+var emptyTime = time.Time{}
 
 // ICANN specifies that DNS servers should return the special value 127.0.53.53
 // for A record queries of TLDs that have recently entered the root zone,
@@ -34,7 +37,7 @@ const NameCollision = "127.0.53.53"
 
 // String returns a string representation of an RR in zone-file format.
 func (rr *RR) String() string {
-	if rr.TTL == nil {
+	if rr.Expiry == emptyTime {
 		return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
 	} else {
 		ttl := ttlString(rr.TTL)
@@ -43,7 +46,7 @@ func (rr *RR) String() string {
 }
 
 // ttlString constructs the TTL field of an RR string.
-func ttlString(ttl *time.Duration) string {
+func ttlString(ttl time.Duration) string {
 	seconds := int(ttl.Seconds())
 	return fmt.Sprintf("%10d", seconds)
 }
@@ -53,8 +56,8 @@ func ttlString(ttl *time.Duration) string {
 // It will attempt to translate this if there are enough parameters
 // Should all translation fail, it returns an undefined RR and false.
 func convertRR(drr dns.RR, expire bool) (RR, bool) {
-	var ttl *time.Duration
-	var expiry *time.Time
+	var ttl time.Duration
+	var expiry time.Time
 	if expire {
 		ttl, expiry = calculateExpiry(drr)
 	}
@@ -81,8 +84,8 @@ func convertRR(drr dns.RR, expire bool) (RR, bool) {
 }
 
 // calculateExpiry calculates the expiry time of an RR.
-func calculateExpiry(drr dns.RR) (*time.Duration, *time.Time) {
+func calculateExpiry(drr dns.RR) (time.Duration, time.Time) {
 	ttl := time.Second * time.Duration(drr.Header().Ttl)
 	expiry := time.Now().Add(ttl)
-	return &ttl, &expiry
+	return ttl, expiry
 }

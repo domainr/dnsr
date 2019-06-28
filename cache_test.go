@@ -20,7 +20,7 @@ func TestLiveCacheEntry(t *testing.T) {
 	c := newCache(100, true)
 	c.addNX("alive.")
 	alive := time.Now().Add(time.Minute)
-	rr := RR{Name: "alive.", Type: "A", Value: "1.2.3.4", Expiry: &alive}
+	rr := RR{Name: "alive.", Type: "A", Value: "1.2.3.4", Expiry: alive}
 	c.add("alive.", rr)
 	rrs := c.get("alive.")
 	st.Expect(t, len(rrs), 1)
@@ -30,7 +30,7 @@ func TestExpiredCacheEntry(t *testing.T) {
 	c := newCache(100, true)
 	c.addNX("expired.")
 	expired := time.Now().Add(-time.Minute)
-	rr := RR{Name: "expired.", Type: "A", Value: "1.2.3.4", Expiry: &expired}
+	rr := RR{Name: "expired.", Type: "A", Value: "1.2.3.4", Expiry: expired}
 	c.add("expired.", rr)
 	rrs := c.get("expired.")
 	st.Expect(t, len(rrs), 0)
