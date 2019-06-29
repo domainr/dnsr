@@ -32,6 +32,7 @@ var (
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
 	cache   *cache
+	expire  bool
 	timeout time.Duration
 }
 
@@ -43,7 +44,23 @@ func New(capacity int) *Resolver {
 // NewWithTimeout initializes a Resolver with the specified cache size and resolution timeout.
 func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
 	r := &Resolver{
-		cache:   newCache(capacity),
+		cache:   newCache(capacity, false),
+		expire:  false,
+		timeout: timeout,
+	}
+	return r
+}
+
+// NewExpiring initializes an expiring Resolver with the specified cache size.
+func NewExpiring(capacity int) *Resolver {
+	return NewExpiringWithTimeout(capacity, Timeout)
+}
+
+// NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and resolution timeout.
+func NewExpiringWithTimeout(capacity int, timeout time.Duration) *Resolver {
+	r := &Resolver{
+		cache:   newCache(capacity, true),
+		expire:  true,
 		timeout: timeout,
 	}
 	return r
@@ -243,7 +260,7 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 			var hasSOA bool
 			if qtype == "NS" {
 				for _, drr := range rmsg.Ns {
-					rr, ok := convertRR(drr)
+					rr, ok := convertRR(drr, r.expire)
 					if !ok {
 						continue
 					}
@@ -293,7 +310,7 @@ func (r *Resolver) saveDNSRR(host, qname string, drrs []dns.RR) RRs {
 	var rrs RRs
 	cl := dns.CountLabel(qname)
 	for _, drr := range drrs {
-		rr, ok := convertRR(drr)
+		rr, ok := convertRR(drr, r.expire)
 		if !ok {
 			continue
 		}

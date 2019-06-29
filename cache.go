@@ -1,9 +1,13 @@
 package dnsr
 
-import "sync"
+import (
+	"sync"
+	"time"
+)
 
 type cache struct {
 	capacity int
+	expire   bool
 	m        sync.RWMutex
 	entries  map[string]entry
 }
@@ -14,13 +18,14 @@ const MinCacheCapacity = 1000
 
 // newCache initializes and returns a new cache instance.
 // Cache capacity defaults to MinCacheCapacity if <= 0.
-func newCache(capacity int) *cache {
+func newCache(capacity int, expire bool) *cache {
 	if capacity <= 0 {
 		capacity = MinCacheCapacity
 	}
 	return &cache{
 		capacity: capacity,
 		entries:  make(map[string]entry),
+		expire:   expire,
 	}
 }
 
@@ -91,11 +96,26 @@ func (c *cache) get(qname string) RRs {
 	if len(e) == 0 {
 		return emptyRRs
 	}
-	i := 0
-	rrs := make(RRs, len(e))
-	for rr, _ := range e {
-		rrs[i] = rr
-		i++
+	if c.expire {
+		i := 0
+		rrs := make(RRs, len(e))
+		now := time.Now()
+		for rr, _ := range e {
+			if !rr.Expiry.IsZero() && now.After(rr.Expiry) {
+				delete(e, rr)
+			} else {
+				rrs[i] = rr
+				i++
+			}
+		}
+		return rrs[:i]
+	} else {
+		i := 0
+		rrs := make(RRs, len(e))
+		for rr, _ := range e {
+			rrs[i] = rr
+			i++
+		}
+		return rrs
 	}
-	return rrs
 }

@@ -187,6 +187,15 @@ func TestBazCoUKAny(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
 }
 
+func TestTTL(t *testing.T) {
+	r := NewExpiring(0)
+	rrs, err := r.ResolveErr("google.com", "A")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 4, true)
+	rr := rrs[0]
+	st.Expect(t, !rr.Expiry.IsZero(), true)
+}
+
 var testResolver *Resolver
 
 func BenchmarkResolve(b *testing.B) {
