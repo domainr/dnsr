@@ -38,7 +38,7 @@ func (rr *RR) String() string {
 		return rr.Name + "\t      3600\tIN\t" + rr.Type + "\t" + rr.Value
 	} else {
 		ttl := ttlString(rr.TTL)
-		return rr.Name + "\t" + ttl + "\t" + rr.Type + "\t" + rr.Value
+		return rr.Name + "\t" + ttl + "\tIN\t" + rr.Type + "\t" + rr.Value
 	}
 }
 
