@@ -81,7 +81,7 @@ func TestGooglePTR(t *testing.T) {
 	r := New(0)
 	rrs, err := r.ResolveErr("99.17.217.172.in-addr.arpa", "PTR")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 4, true)
+	st.Expect(t, len(rrs) >= 2, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "PTR" }) >= 1, true)
 }
 
