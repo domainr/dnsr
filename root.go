@@ -13,7 +13,7 @@ var root = `
 ;       -OR-                    RS.INTERNIC.NET
 ; 
 ;       last update:     February 18, 2020 
-;       related version of root zone:     2020021800
+;       related version of root zone:     2020021803
 ; 
 ; FORMERLY NS.INTERNIC.NET 
 ;
