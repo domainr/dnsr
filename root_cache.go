@@ -24,6 +24,6 @@ func init() {
 	}
 
 	if err := zp.Err(); err != nil {
-		return
+		panic(err)
 	}
 }
