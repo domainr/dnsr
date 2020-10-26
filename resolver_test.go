@@ -8,12 +8,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/domainr/dnsr/internal/israce"
 	"github.com/nbio/st"
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	if testing.Verbose() {
+	if israce.Enabled {
+		Timeout *= 2
+	}
+	if os.Getenv("DNSR_DEBUG") != "" {
 		DebugLogger = os.Stderr
 	}
 	os.Exit(m.Run())
@@ -39,7 +43,7 @@ func TestDeadlineExceeded(t *testing.T) {
 
 func TestResolveCtx(t *testing.T) {
 	r := New(0)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	_, err := r.ResolveCtx(ctx, "1.com", "")
 	st.Expect(t, err, NXDOMAIN)
 	cancel()
@@ -191,7 +195,7 @@ func TestTTL(t *testing.T) {
 	r := NewExpiring(0)
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 4, true)
+	st.Assert(t, len(rrs) >= 4, true)
 	rr := rrs[0]
 	st.Expect(t, !rr.Expiry.IsZero(), true)
 }
