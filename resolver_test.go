@@ -197,7 +197,7 @@ func TestTTL(t *testing.T) {
 	r := NewExpiring(0)
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 4, true)
+	st.Assert(t, len(rrs) >= 4, true)
 	rr := rrs[0]
 	st.Expect(t, !rr.Expiry.IsZero(), true)
 }
