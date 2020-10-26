@@ -1,7 +1,7 @@
 # dnsr
 
 [![build status](https://img.shields.io/github/workflow/status/domainr/dnsr/Go.svg)](https://github.com/domainr/dnsr/actions)
-[![godoc](http://img.shields.io/badge/docs-pkg.go.dev-blue.svg)](https://pkg.go.dev/github.com/domainr/dnsr)
+[![pkg.go.dev](http://img.shields.io/badge/docs-pkg.go.dev-blue.svg)](https://pkg.go.dev/github.com/domainr/dnsr)
 
 Iterative DNS resolver for [Go](https://golang.org/).
 
@@ -34,7 +34,7 @@ func main() {
 
 Or construct with `dnsr.NewExpiring()` to expire cache entries based on TTL.
 
-[Documentation](https://godoc.org/github.com/domainr/dnsr)
+[Documentation](https://pkg.go.dev/github.com/domainr/dnsr)
 
 ## Development
 
