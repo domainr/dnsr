@@ -25,9 +25,7 @@ func TestMain(m *testing.M) {
 
 func TestSimple(t *testing.T) {
 	r := New(0)
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	_, err := r.ResolveCtx(ctx, "1.com", "")
+	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, NXDOMAIN)
 }
 
