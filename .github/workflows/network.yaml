@@ -1,0 +1,16 @@
+name: Network
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+jobs:
+  dns:
+    name: DNS
+    runs-on: ubuntu-latest
+    steps:
+      - run: dig +norecurse @a.root-servers.net. com. NS
+      - run: dig +norecurse @b.gtld-servers.net. 1.com. NS
+      - run: dig +norecurse @c.gtld-servers.net. 1.com. A
