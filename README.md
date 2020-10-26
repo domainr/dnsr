@@ -42,4 +42,4 @@ Run `go generate` in Go 1.4+ to refresh the [root zone hint file](http://www.int
 
 ## Copyright
 
-© 2014–2015 nb.io, LLC
+© nb.io, LLC
