@@ -10,7 +10,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - name: Checkout repo
         uses: actions/checkout@v2
@@ -25,8 +25,8 @@ jobs:
       - name: Vet Go code
         run: go vet ./...
 
-      - name: Run Go tests
-        run: go test -mod=readonly -v -race ./...
+      - name: Test Go code
+        run: go test -v -race ./...
 
       - name: Verify repo is unchanged
         run: git diff --exit-code HEAD
