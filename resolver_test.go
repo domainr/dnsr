@@ -21,7 +21,9 @@ func TestMain(m *testing.M) {
 
 func TestSimple(t *testing.T) {
 	r := New(0)
-	_, err := r.ResolveErr("1.com", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	_, err := r.ResolveCtx(ctx, "1.com", "")
 	st.Expect(t, err, NXDOMAIN)
 }
 
@@ -39,7 +41,7 @@ func TestDeadlineExceeded(t *testing.T) {
 
 func TestResolveCtx(t *testing.T) {
 	r := New(0)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	_, err := r.ResolveCtx(ctx, "1.com", "")
 	st.Expect(t, err, NXDOMAIN)
 	cancel()
