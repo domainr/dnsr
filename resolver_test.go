@@ -15,7 +15,7 @@ import (
 func TestMain(m *testing.M) {
 	flag.Parse()
 	if israce.Enabled {
-		Timeout *= 2
+		Timeout *= 3
 	}
 	if os.Getenv("DNSR_DEBUG") != "" {
 		DebugLogger = os.Stderr
