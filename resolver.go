@@ -208,22 +208,14 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 }
 
 func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, depth int) (RRs, error) {
-	dtype := dns.StringToType[qtype]
-	if dtype == 0 {
-		dtype = dns.TypeA
-	}
-	qmsg := &dns.Msg{}
-	qmsg.SetQuestion(qname, dtype)
-	qmsg.MsgHdr.RecursionDesired = false
-
-	// Find each A record for the DNS server
 	count := 0
 	arrs, err := r.resolve(ctx, host, "A", depth)
 	if err != nil {
 		return nil, err
 	}
 	for _, arr := range arrs {
-		if arr.Type != "A" { // FIXME: support AAAA records?
+		// FIXME: support AAAA records?
+		if arr.Type != "A" {
 			continue
 		}
 
@@ -232,60 +224,101 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 			return nil, ErrMaxIPs
 		}
 
-		// Synchronously query this DNS server
-		start := time.Now()
-		timeout := r.timeout // belt and suspenders, since ctx has a deadline from ResolveErr
-		if dl, ok := ctx.Deadline(); ok {
-			if start.After(dl.Add(-TypicalResponseTime)) { // bail if we can't finish in time (start is too close to deadline)
-				return nil, ErrTimeout
-			}
-			timeout = dl.Sub(start)
+		rrs, err := r.exchangeIP(ctx, host, arr.Value, qname, qtype, depth)
+		if err == nil || err == NXDOMAIN || err == ErrTimeout {
+			return rrs, err
 		}
 
-		client := &dns.Client{Timeout: timeout} // client must finish within remaining timeout
-		rmsg, dur, err := client.Exchange(qmsg, arr.Value+":53")
-		select {
-		case <-ctx.Done(): // Finished too late
-			logCancellation(host, qmsg, rmsg, depth, dur, timeout)
+		if ctx.Err() != nil {
 			return nil, ctx.Err()
-		default:
-			logExchange(host, qmsg, rmsg, depth, dur, timeout, err) // Log hostname instead of IP
 		}
-		if err != nil {
-			continue
-		}
-
-		// FIXME: cache NXDOMAIN responses responsibly
-		if rmsg.Rcode == dns.RcodeNameError {
-			var hasSOA bool
-			if qtype == "NS" {
-				for _, drr := range rmsg.Ns {
-					rr, ok := convertRR(drr, r.expire)
-					if !ok {
-						continue
-					}
-					if rr.Type == "SOA" {
-						hasSOA = true
-						break
-					}
-				}
-			}
-			if !hasSOA {
-				r.cache.addNX(qname)
-				return nil, NXDOMAIN
-			}
-		} else if rmsg.Rcode != dns.RcodeSuccess {
-			return nil, errors.New(dns.RcodeToString[rmsg.Rcode])
-		}
-
-		// Cache records returned
-		rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
-
-		// Return after first successful network request
-		return rrs, nil
 	}
 
 	return nil, ErrNoARecords
+}
+
+func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string, depth int) (RRs, error) {
+	dtype := dns.StringToType[qtype]
+	if dtype == 0 {
+		dtype = dns.TypeA
+	}
+	var qmsg dns.Msg
+	qmsg.SetQuestion(qname, dtype)
+	qmsg.MsgHdr.RecursionDesired = false
+
+	// Synchronously query this DNS server
+	start := time.Now()
+	timeout := r.timeout // belt and suspenders, since ctx has a deadline from ResolveErr
+	if dl, ok := ctx.Deadline(); ok {
+		if start.After(dl.Add(-TypicalResponseTime)) { // bail if we can't finish in time (start is too close to deadline)
+			return nil, ErrTimeout
+		}
+		timeout = dl.Sub(start)
+	}
+
+	client := &dns.Client{Timeout: timeout} // client must finish within remaining timeout
+	rmsg, dur, err := client.Exchange(&qmsg, ip+":53")
+	select {
+	case <-ctx.Done(): // Finished too late
+		logCancellation(host, &qmsg, rmsg, depth, dur, timeout)
+		return nil, ctx.Err()
+	default:
+		logExchange(host, &qmsg, rmsg, depth, dur, timeout, err) // Log hostname instead of IP
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// FIXME: cache NXDOMAIN responses responsibly
+	if rmsg.Rcode == dns.RcodeNameError {
+		var hasSOA bool
+		if qtype == "NS" {
+			for _, drr := range rmsg.Ns {
+				rr, ok := convertRR(drr, r.expire)
+				if !ok {
+					continue
+				}
+				if rr.Type == "SOA" {
+					hasSOA = true
+					break
+				}
+			}
+		}
+		if !hasSOA {
+			r.cache.addNX(qname)
+			return nil, NXDOMAIN
+		}
+	} else if rmsg.Rcode != dns.RcodeSuccess {
+		return nil, errors.New(dns.RcodeToString[rmsg.Rcode]) // FIXME: should (*Resolver).exchange special-case this error?
+	}
+
+	// Cache records returned
+	rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
+
+	// Resolve IP addresses of TLD name servers if NS query doesn’t return additional section
+	if qtype == "NS" {
+		for _, rr := range rrs {
+			if rr.Type != "NS" {
+				continue
+			}
+			arrs, err := r.cacheGet(ctx, rr.Value, "A")
+			if err == NXDOMAIN {
+				continue
+			}
+			if err != nil {
+				break
+			}
+			if len(arrs) == 0 {
+				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
+				if err != nil {
+					break
+				}
+			}
+			rrs = append(rrs, arrs...)
+		}
+	}
+
+	return rrs, nil
 }
 
 func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs RRs, depth int) (RRs, error) {

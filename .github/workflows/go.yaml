@@ -3,7 +3,7 @@ name: Go
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
 
 jobs:
@@ -26,8 +26,6 @@ jobs:
         run: go vet ./...
 
       - name: Test Go code
-        env:
-          DNSR_DEBUG: 1
         run: go test -v -race ./...
 
       - name: Verify repo is unchanged
