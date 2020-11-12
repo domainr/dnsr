@@ -107,3 +107,12 @@ func logCancellation(host string, qmsg *dns.Msg, rmsg *dns.Msg, depth int, dur t
 	}
 	fmt.Fprintf(DebugLogger, "== CANCELED ==\n")
 }
+
+func logMsg(msg *dns.Msg) {
+	if DebugLogger == nil {
+		return
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	fmt.Fprintln(DebugLogger, msg.String())
+}
