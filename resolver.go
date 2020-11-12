@@ -302,15 +302,17 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 				continue
 			}
 			arrs, err := r.cacheGet(ctx, rr.Value, "A")
-			if err != nil {
+			if err == NXDOMAIN {
 				continue
 			}
+			if err != nil {
+				break
+			}
 			if len(arrs) == 0 {
-				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth)
+				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
 				if err != nil {
-					continue
+					break
 				}
-				// fmt.Printf("dig @%s %s A\n\t%#v\n", host, rr.Value, arrs)
 			}
 			rrs = append(rrs, arrs...)
 		}
