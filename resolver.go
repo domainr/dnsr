@@ -225,8 +225,12 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 		}
 
 		rrs, err := r.exchangeIP(ctx, host, arr.Value, qname, qtype, depth)
-		if err == nil || err == NXDOMAIN {
+		if err == nil || err == NXDOMAIN || err == ErrTimeout {
 			return rrs, err
+		}
+
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
 		}
 	}
 
@@ -285,11 +289,32 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 			return nil, NXDOMAIN
 		}
 	} else if rmsg.Rcode != dns.RcodeSuccess {
-		return nil, errors.New(dns.RcodeToString[rmsg.Rcode])
+		return nil, errors.New(dns.RcodeToString[rmsg.Rcode]) // FIXME: should (*Resolver).exchange special-case this error?
 	}
 
 	// Cache records returned
 	rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
+
+	// Resolve IP addresses of TLD name servers if NS query doesn’t return additional section
+	if qtype == "NS" {
+		for _, rr := range rrs {
+			if rr.Type != "NS" {
+				continue
+			}
+			arrs, err := r.cacheGet(ctx, rr.Value, "A")
+			if err != nil {
+				continue
+			}
+			if len(arrs) == 0 {
+				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth)
+				if err != nil {
+					continue
+				}
+				// fmt.Printf("dig @%s %s A\n\t%#v\n", host, rr.Value, arrs)
+			}
+			rrs = append(rrs, arrs...)
+		}
+	}
 
 	return rrs, nil
 }
