@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domainr/dnsr/internal/israce"
 	"github.com/nbio/st"
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	if israce.Enabled {
-		Timeout *= 3
+	timeout := os.Getenv("DNSR_TIMEOUT")
+	if timeout != "" {
+		Timeout, _ = time.ParseDuration(timeout)
 	}
 	if os.Getenv("DNSR_DEBUG") != "" {
 		DebugLogger = os.Stderr

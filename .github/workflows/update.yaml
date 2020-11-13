@@ -29,6 +29,8 @@ jobs:
         run: go vet ./...
 
       - name: Run Go tests
+        env:
+          DNSR_TIMEOUT: 10s
         run: go test -mod=readonly -v -race ./...
 
       - name: Commit changes

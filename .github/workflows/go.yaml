@@ -26,6 +26,8 @@ jobs:
         run: go vet ./...
 
       - name: Test Go code
+        env:
+          DNSR_TIMEOUT: 10s
         run: go test -v -race ./...
 
       - name: Verify repo is unchanged
