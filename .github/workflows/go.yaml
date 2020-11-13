@@ -31,6 +31,8 @@ jobs:
         run: go test -v -race ./... -run UK
 
       - name: Test Go code
+        env:
+          DNSR_TIMEOUT: 5s
         run: go test -v -race ./...
 
       - name: Verify repo is unchanged
