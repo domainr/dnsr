@@ -240,7 +240,7 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string, depth int) (RRs, error) {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
-		dtype = dns.TypeANY
+		dtype = dns.TypeA
 	}
 	var qmsg dns.Msg
 	qmsg.SetQuestion(qname, dtype)
