@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/domainr/dnsr/internal/israce"
 	"github.com/nbio/st"
 )
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	if israce.Enabled {
-		Timeout *= 3
+	timeout := os.Getenv("DNSR_TIMEOUT")
+	if timeout != "" {
+		Timeout, _ = time.ParseDuration(timeout)
 	}
 	if os.Getenv("DNSR_DEBUG") != "" {
 		DebugLogger = os.Stderr
@@ -99,6 +99,7 @@ func TestGoogleMX(t *testing.T) {
 }
 
 func TestGoogleAny(t *testing.T) {
+	time.Sleep(Timeout) // To address flaky test on GitHub Actions
 	r := New(0)
 	rrs, err := r.ResolveErr("google.com", "")
 	st.Expect(t, err, nil)
@@ -184,6 +185,7 @@ func TestBlueOvenMulti(t *testing.T) {
 }
 
 func TestBazCoUKAny(t *testing.T) {
+	time.Sleep(Timeout) // To address flaky test on GitHub Actions
 	r := New(0)
 	rrs, err := r.ResolveErr("baz.co.uk", "")
 	st.Expect(t, err, nil)

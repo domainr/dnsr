@@ -25,7 +25,14 @@ jobs:
       - name: Vet Go code
         run: go vet ./...
 
+      - name: Run flaky test
+        env:
+          DNSR_DEBUG: 1
+        run: go test -v -race ./... -run UK
+
       - name: Test Go code
+        env:
+          DNSR_TIMEOUT: 5s
         run: go test -v -race ./...
 
       - name: Verify repo is unchanged
