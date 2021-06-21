@@ -41,6 +41,12 @@ func TestDeadlineExceeded(t *testing.T) {
 	st.Expect(t, err, context.DeadlineExceeded)
 }
 
+func TestFluentConstructorDeadlineExceeded(t *testing.T) {
+	r := NewResolver(0, WithTimeout(0))
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, context.DeadlineExceeded)
+}
+
 func TestResolveCtx(t *testing.T) {
 	r := New(0)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)

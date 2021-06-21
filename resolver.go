@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/miekg/dns"
@@ -34,6 +35,47 @@ type Resolver struct {
 	cache   *cache
 	expire  bool
 	timeout time.Duration
+	dialer  *net.Dialer
+}
+
+// ResolverOption configures a single resolver setting
+type ResolverOption func(r *Resolver)
+
+// NewResolver creates a resolver with the given cache capacity and a set of extra options.
+func NewResolver(capacity int, options ...ResolverOption) *Resolver {
+	r := &Resolver{
+		cache:   newCache(capacity, false),
+		expire:  false,
+		timeout: Timeout,
+	}
+	for _, option := range options {
+		option(r)
+	}
+	return r
+}
+
+// WithTimeout returns a ResolverOption that can be used on NewResolver to change the timeout of the name resolution.
+func WithTimeout(timeout time.Duration) ResolverOption {
+	return func(r *Resolver) {
+		r.timeout = timeout
+	}
+}
+
+// Expiring returns a ResolverOption that can be used on NewResolver to change the resolver cache to be expiring.
+func Exipiring() ResolverOption {
+	return func(r *Resolver) {
+		capacity := r.cache.capacity
+		r.cache = newCache(capacity, true)
+		r.expire = true
+	}
+}
+
+// WithDialer returns a ResolverOption that can be used on NewResolver to change the resolver dialer.
+// A custom dialer can be used to specify the local ip address.
+func WithDialer(dialer *net.Dialer) ResolverOption {
+	return func(r *Resolver) {
+		r.dialer = dialer
+	}
 }
 
 // New initializes a Resolver with the specified cache size.
@@ -256,7 +298,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		timeout = dl.Sub(start)
 	}
 
-	client := &dns.Client{Timeout: timeout} // client must finish within remaining timeout
+	client := &dns.Client{Timeout: timeout, Dialer: r.dialer} // client must finish within remaining timeout
 	rmsg, dur, err := client.Exchange(&qmsg, ip+":53")
 	select {
 	case <-ctx.Done(): // Finished too late
