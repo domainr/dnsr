@@ -29,8 +29,20 @@ func TestSimple(t *testing.T) {
 	st.Expect(t, err, NXDOMAIN)
 }
 
+func TestSimpleFuncOptions(t *testing.T) {
+	r := NewResolver(WithCapacity(0))
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, NXDOMAIN)
+}
+
 func TestTimeoutExpiration(t *testing.T) {
 	r := NewWithTimeout(0, 10*time.Millisecond)
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, ErrTimeout)
+}
+
+func TestTimeoutExpirationFuncOptions(t *testing.T) {
+	r := NewResolver(WithTimeout(10 * time.Millisecond))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, ErrTimeout)
 }
@@ -41,8 +53,8 @@ func TestDeadlineExceeded(t *testing.T) {
 	st.Expect(t, err, context.DeadlineExceeded)
 }
 
-func TestFluentConstructorDeadlineExceeded(t *testing.T) {
-	r := NewResolver(0, WithTimeout(0))
+func TestDeadlineExceededFuncOptions(t *testing.T) {
+	r := NewResolver(WithTimeout(0))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, context.DeadlineExceeded)
 }
@@ -201,6 +213,15 @@ func TestBazCoUKAny(t *testing.T) {
 
 func TestTTL(t *testing.T) {
 	r := NewExpiring(0)
+	rrs, err := r.ResolveErr("google.com", "A")
+	st.Expect(t, err, nil)
+	st.Assert(t, len(rrs) >= 4, true)
+	rr := rrs[0]
+	st.Expect(t, !rr.Expiry.IsZero(), true)
+}
+
+func TestTTLFuncOptions(t *testing.T) {
+	r := NewResolver(Expiring())
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
 	st.Assert(t, len(rrs) >= 4, true)
