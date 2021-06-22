@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -57,6 +58,18 @@ func TestDeadlineExceededFuncOptions(t *testing.T) {
 	r := NewResolver(WithTimeout(0))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, context.DeadlineExceeded)
+}
+
+func TestDialer(t *testing.T) {
+	r := NewResolver(WithDialer(&net.Dialer{
+		// iterative resolving from 127.0.0.1 should never work
+		LocalAddr: &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 65353},
+	}))
+	res, err := r.ResolveErr("google.com", "A")
+	// TODO: this causes a "connect: invalid argument" error inside the exchange method
+	// however that error is not propagate upwards so we expect an empty RRs and no error.
+	st.Expect(t, err, nil)
+	st.Expect(t, len(res), 0)
 }
 
 func TestResolveCtx(t *testing.T) {
