@@ -39,49 +39,58 @@ type Resolver struct {
 }
 
 // ResolverOption configures a single resolver setting
-type resolverOption func(r *Resolver)
+type ResolverOption resolverOption
+
+// resolverOption is the private resolver option type
+type resolverOption func(r *Resolver) error
 
 // NewResolver creates a resolver with the given cache capacity and a set of extra options.
-func NewResolver(options ...resolverOption) *Resolver {
+func NewResolver(options ...ResolverOption) (*Resolver, error) {
 	r := &Resolver{
 		cache:   newCache(0, false),
 		expire:  false,
 		timeout: Timeout,
 	}
 	for _, option := range options {
-		option(r)
+		if err := option(r); err != nil {
+			return nil, err
+		}
 	}
-	return r
+	return r, nil
 }
 
 // WithTimeout returns a resolverOption that can be used on NewResolver to change the timeout of the name resolution.
-func WithTimeout(timeout time.Duration) resolverOption {
-	return func(r *Resolver) {
+func WithTimeout(timeout time.Duration) ResolverOption {
+	return func(r *Resolver) error {
 		r.timeout = timeout
+		return nil
 	}
 }
 
 // Expiring returns a resolverOption that can be used on NewResolver to change the resolver cache to be expiring.
-func Expiring() resolverOption {
-	return func(r *Resolver) {
+func Expiring() ResolverOption {
+	return func(r *Resolver) error {
 		capacity := r.cache.capacity
 		r.cache = newCache(capacity, true)
 		r.expire = true
+		return nil
 	}
 }
 
 // WithCapacity returns a resolverOption that can be used on NewResolver to change the cache capacity of the resolver.
-func WithCapacity(capacity int) resolverOption {
-	return func(r *Resolver) {
+func WithCapacity(capacity int) ResolverOption {
+	return func(r *Resolver) error {
 		r.cache = newCache(capacity, r.expire)
+		return nil
 	}
 }
 
 // WithDialer returns a resolverOption that can be used on NewResolver to change the resolver dialer.
 // A custom dialer can be used to specify the local ip address.
-func WithDialer(dialer *net.Dialer) resolverOption {
-	return func(r *Resolver) {
+func WithDialer(dialer *net.Dialer) ResolverOption {
+	return func(r *Resolver) error {
 		r.dialer = dialer
+		return nil
 	}
 }
 

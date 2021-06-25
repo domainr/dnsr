@@ -31,7 +31,7 @@ func TestSimple(t *testing.T) {
 }
 
 func TestSimpleFuncOptions(t *testing.T) {
-	r := NewResolver(WithCapacity(0))
+	r, _ := NewResolver(WithCapacity(0))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, NXDOMAIN)
 }
@@ -43,7 +43,7 @@ func TestTimeoutExpiration(t *testing.T) {
 }
 
 func TestTimeoutExpirationFuncOptions(t *testing.T) {
-	r := NewResolver(WithTimeout(10 * time.Millisecond))
+	r, _ := NewResolver(WithTimeout(10 * time.Millisecond))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, ErrTimeout)
 }
@@ -55,13 +55,13 @@ func TestDeadlineExceeded(t *testing.T) {
 }
 
 func TestDeadlineExceededFuncOptions(t *testing.T) {
-	r := NewResolver(WithTimeout(0))
+	r, _ := NewResolver(WithTimeout(0))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, context.DeadlineExceeded)
 }
 
 func TestDialer(t *testing.T) {
-	r := NewResolver(WithDialer(&net.Dialer{
+	r, _ := NewResolver(WithDialer(&net.Dialer{
 		// iterative resolving from 127.0.0.1 should never work
 		LocalAddr: &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 65353},
 	}))
@@ -234,7 +234,7 @@ func TestTTL(t *testing.T) {
 }
 
 func TestTTLFuncOptions(t *testing.T) {
-	r := NewResolver(Expiring())
+	r, _ := NewResolver(Expiring())
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
 	st.Assert(t, len(rrs) >= 4, true)
