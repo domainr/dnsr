@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -29,8 +30,20 @@ func TestSimple(t *testing.T) {
 	st.Expect(t, err, NXDOMAIN)
 }
 
+func TestSimpleFuncOptions(t *testing.T) {
+	r, _ := NewResolver(WithCapacity(0))
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, NXDOMAIN)
+}
+
 func TestTimeoutExpiration(t *testing.T) {
 	r := NewWithTimeout(0, 10*time.Millisecond)
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, ErrTimeout)
+}
+
+func TestTimeoutExpirationFuncOptions(t *testing.T) {
+	r, _ := NewResolver(WithTimeout(10 * time.Millisecond))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, ErrTimeout)
 }
@@ -39,6 +52,24 @@ func TestDeadlineExceeded(t *testing.T) {
 	r := NewWithTimeout(0, 0)
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, context.DeadlineExceeded)
+}
+
+func TestDeadlineExceededFuncOptions(t *testing.T) {
+	r, _ := NewResolver(WithTimeout(0))
+	_, err := r.ResolveErr("1.com", "")
+	st.Expect(t, err, context.DeadlineExceeded)
+}
+
+func TestDialer(t *testing.T) {
+	r, _ := NewResolver(WithDialer(&net.Dialer{
+		// iterative resolving from 127.0.0.1 should never work
+		LocalAddr: &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 65353},
+	}))
+	res, err := r.ResolveErr("google.com", "A")
+	// TODO: this causes a "connect: invalid argument" error inside the exchange method
+	// however that error is not propagate upwards so we expect an empty RRs and no error.
+	st.Expect(t, err, nil)
+	st.Expect(t, len(res), 0)
 }
 
 func TestResolveCtx(t *testing.T) {
@@ -195,6 +226,15 @@ func TestBazCoUKAny(t *testing.T) {
 
 func TestTTL(t *testing.T) {
 	r := NewExpiring(0)
+	rrs, err := r.ResolveErr("google.com", "A")
+	st.Expect(t, err, nil)
+	st.Assert(t, len(rrs) >= 4, true)
+	rr := rrs[0]
+	st.Expect(t, !rr.Expiry.IsZero(), true)
+}
+
+func TestTTLFuncOptions(t *testing.T) {
+	r, _ := NewResolver(Expiring())
 	rrs, err := r.ResolveErr("google.com", "A")
 	st.Expect(t, err, nil)
 	st.Assert(t, len(rrs) >= 4, true)
