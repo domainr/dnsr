@@ -35,3 +35,19 @@ func TestExpiredCacheEntry(t *testing.T) {
 	rrs := c.get("expired.")
 	st.Expect(t, len(rrs), 0)
 }
+
+func TestCacheContention(t *testing.T) {
+	k := "expired."
+	c := newCache(10, true)
+	f := func() {
+		rrs := c.get(k)
+		st.Expect(t, len(rrs), 0)
+		c.addNX(k)
+		expired := time.Now().Add(-time.Minute)
+		rr := RR{Name: k, Type: "A", Value: "1.2.3.4", Expiry: expired}
+		c.add(k, rr)
+	}
+	for i := 0; i < 10; i++ {
+		go f()
+	}
+}
