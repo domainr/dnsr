@@ -59,7 +59,7 @@ func (c *cache) _add(qname string, rr RR) {
 	e[rr] = struct{}{}
 }
 
-// addEntry adds an entry for qname to c.
+// _addEntry adds an entry for qname to c.
 // Not safe for concurrent usage.
 func (c *cache) _addEntry(qname string) {
 	_, ok := c.entries[qname]
@@ -77,6 +77,26 @@ func (c *cache) _evict() {
 	if len(c.entries) < c.capacity {
 		return
 	}
+
+	// First evict expired entries
+	if c.expire {
+		now := time.Now()
+		for k, e := range c.entries {
+			for rr := range e {
+				if !rr.Expiry.IsZero() && rr.Expiry.Before(now) {
+					delete(e, rr)
+				}
+			}
+			if len(e) == 0 {
+				delete(c.entries, k)
+			}
+			if len(c.entries) < c.capacity {
+				return
+			}
+		}
+	}
+
+	// Then randomly evict entries
 	for k := range c.entries {
 		delete(c.entries, k)
 		if len(c.entries) < c.capacity {
@@ -97,22 +117,18 @@ func (c *cache) get(qname string) RRs {
 		return emptyRRs
 	}
 	if c.expire {
-		i := 0
-		rrs := make(RRs, len(e))
 		now := time.Now()
-		for rr, _ := range e {
-			if !rr.Expiry.IsZero() && now.After(rr.Expiry) {
-				delete(e, rr)
-			} else {
-				rrs[i] = rr
-				i++
+		rrs := make(RRs, 0, len(e))
+		for rr := range e {
+			if rr.Expiry.IsZero() || rr.Expiry.After(now) {
+				rrs = append(rrs, rr)
 			}
 		}
-		return rrs[:i]
+		return rrs
 	} else {
 		i := 0
 		rrs := make(RRs, len(e))
-		for rr, _ := range e {
+		for rr := range e {
 			rrs[i] = rr
 			i++
 		}
