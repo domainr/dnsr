@@ -95,7 +95,7 @@ func TestGoogleMX(t *testing.T) {
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "MX" }) >= 2, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "MX" }) >= 1, true)
 }
 
 func TestGoogleAny(t *testing.T) {
