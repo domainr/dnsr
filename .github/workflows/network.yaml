@@ -9,7 +9,7 @@ on:
 jobs:
   dns:
     name: DNS
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - run: dig +norecurse @a.root-servers.net. com. NS
       - run: dig +norecurse @b.gtld-servers.net. 1.com. NS
