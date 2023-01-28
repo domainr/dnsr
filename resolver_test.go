@@ -131,7 +131,7 @@ func TestGoogleTXT(t *testing.T) {
 
 func TestAppleA(t *testing.T) {
 	r := New(0)
-	rrs, err := r.ResolveErr("www.apple.com", "A")
+	rrs, err := r.ResolveErr("apple.com", "A")
 	st.Expect(t, err, nil)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true)
 }
