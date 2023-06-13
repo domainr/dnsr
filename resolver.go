@@ -126,7 +126,18 @@ func (r *Resolver) ResolveErr(qname, qtype string) (RRs, error) {
 // For nonexistent domains, it will return an NXDOMAIN error.
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, SOA, and TXT).
+// Deprecated: use ResolveContext.
 func (r *Resolver) ResolveCtx(ctx context.Context, qname, qtype string) (RRs, error) {
+	return r.ResolveContext(ctx, qname, qtype)
+}
+
+// ResolveContext finds DNS records of type qtype for the domain qname using
+// the supplied context. Requests may time out earlier if timeout is
+// shorter than a deadline set in ctx.
+// For nonexistent domains, it will return an NXDOMAIN error.
+// Specify an empty string in qtype to receive any DNS records found
+// (currently A, AAAA, NS, CNAME, SOA, and TXT).
+func (r *Resolver) ResolveContext(ctx context.Context, qname, qtype string) (RRs, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 	return r.resolve(ctx, toLowerFQDN(qname), qtype, 0)

@@ -51,6 +51,16 @@ func TestResolveCtx(t *testing.T) {
 	st.Expect(t, err, context.Canceled)
 }
 
+func TestResolveContext(t *testing.T) {
+	r := New(0)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	_, err := r.ResolveContext(ctx, "1.com", "")
+	st.Expect(t, err, NXDOMAIN)
+	cancel()
+	_, err = r.ResolveContext(ctx, "1.com", "")
+	st.Expect(t, err, context.Canceled)
+}
+
 func TestResolverCache(t *testing.T) {
 	r := New(0)
 	r.cache.capacity = 10
