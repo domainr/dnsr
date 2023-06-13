@@ -29,41 +29,72 @@ var (
 	ErrTimeout      = fmt.Errorf("timeout expired") // TODO: Timeouter interface? e.g. func (e) Timeout() bool { return true }
 )
 
+// Option specifies a configuration option for a Resolver.
+type Option func(*Resolver)
+
+// WithCache specifies a cache with capacity cap.
+func WithCache(cap int) Option {
+	return func(r *Resolver) {
+		r.capacity = cap
+	}
+}
+
+// WithExpiry specifies that the Resolver will delete stale cache entries.
+func WithExpiry() Option {
+	return func(r *Resolver) {
+		r.expire = true
+	}
+}
+
+// WithTimeout specifies the timeout for network operations.
+// The default value is Timeout.
+func WithTimeout(timeout time.Duration) Option {
+	return func(r *Resolver) {
+		r.timeout = timeout
+	}
+}
+
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
-	cache   *cache
-	expire  bool
-	timeout time.Duration
+	timeout  time.Duration
+	cache    *cache
+	capacity int
+	expire   bool
+}
+
+// NewResolver returns an initialized Resolver with options.
+// By default, the returned Resolver will have cache capacity 0
+// and no timeout.
+func NewResolver(options ...Option) *Resolver {
+	r := &Resolver{}
+	for _, o := range options {
+		o(r)
+	}
+	r.cache = newCache(r.capacity, r.expire)
+	return r
 }
 
 // New initializes a Resolver with the specified cache size.
-func New(capacity int) *Resolver {
-	return NewWithTimeout(capacity, Timeout)
+// Deprecated: use NewResolver with Option(s) instead.
+func New(cap int) *Resolver {
+	return NewResolver(WithCache(cap), WithTimeout(Timeout))
 }
 
 // NewWithTimeout initializes a Resolver with the specified cache size and resolution timeout.
-func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
-	r := &Resolver{
-		cache:   newCache(capacity, false),
-		expire:  false,
-		timeout: timeout,
-	}
-	return r
+// Deprecated: use NewResolver with Option(s) instead.
+func NewWithTimeout(cap int, timeout time.Duration) *Resolver {
+	return NewResolver(WithCache(cap), WithTimeout(timeout))
 }
 
 // NewExpiring initializes an expiring Resolver with the specified cache size.
-func NewExpiring(capacity int) *Resolver {
-	return NewExpiringWithTimeout(capacity, Timeout)
+func NewExpiring(cap int) *Resolver {
+	return NewResolver(WithCache(cap), WithExpiry())
 }
 
 // NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and resolution timeout.
-func NewExpiringWithTimeout(capacity int, timeout time.Duration) *Resolver {
-	r := &Resolver{
-		cache:   newCache(capacity, true),
-		expire:  true,
-		timeout: timeout,
-	}
-	return r
+// Deprecated: use NewResolver with Option(s) instead.
+func NewExpiringWithTimeout(cap int, timeout time.Duration) *Resolver {
+	return NewResolver(WithCache(cap), WithTimeout(timeout), WithExpiry())
 }
 
 // Resolve calls ResolveErr to find DNS records of type qtype for the domain qname.
