@@ -45,6 +45,24 @@ func TestWithTimeout(t *testing.T) {
 	st.Expect(t, r.timeout, 99*time.Second)
 }
 
+func TestNewExpiring(t *testing.T) {
+	r := NewExpiring(42)
+	st.Expect(t, r.cache.capacity, 42)
+	st.Expect(t, r.expire, true)
+}
+
+func TestNewExpiringWithTimeout(t *testing.T) {
+	r := NewExpiringWithTimeout(42, 99*time.Second)
+	st.Expect(t, r.cache.capacity, 42)
+	st.Expect(t, r.timeout, 99*time.Second)
+	st.Expect(t, r.expire, true)
+}
+
+func TestNewExpiry(t *testing.T) {
+	r := NewResolver(WithExpiry())
+	st.Expect(t, r.expire, true)
+}
+
 func TestSimple(t *testing.T) {
 	r := NewResolver()
 	_, err := r.ResolveErr("1.com", "")
@@ -52,7 +70,7 @@ func TestSimple(t *testing.T) {
 }
 
 func TestTimeoutExpiration(t *testing.T) {
-	r := NewWithTimeout(0, 10*time.Millisecond)
+	r := NewResolver(WithTimeout(10 * time.Millisecond))
 	_, err := r.ResolveErr("1.com", "")
 	st.Expect(t, err, ErrTimeout)
 }
