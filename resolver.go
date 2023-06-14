@@ -80,18 +80,19 @@ func New(cap int) *Resolver {
 	return NewResolver(WithCache(cap), WithTimeout(Timeout))
 }
 
-// NewWithTimeout initializes a Resolver with the specified cache size and resolution timeout.
+// NewWithTimeout initializes a Resolver with the specified cache size and timeout.
 // Deprecated: use NewResolver with Option(s) instead.
 func NewWithTimeout(cap int, timeout time.Duration) *Resolver {
 	return NewResolver(WithCache(cap), WithTimeout(timeout))
 }
 
 // NewExpiring initializes an expiring Resolver with the specified cache size.
+// Deprecated: use NewResolver with Option(s) instead.
 func NewExpiring(cap int) *Resolver {
-	return NewResolver(WithCache(cap), WithExpiry())
+	return NewExpiringWithTimeout(cap, Timeout)
 }
 
-// NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and resolution timeout.
+// NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and timeout.
 // Deprecated: use NewResolver with Option(s) instead.
 func NewExpiringWithTimeout(cap int, timeout time.Duration) *Resolver {
 	return NewResolver(WithCache(cap), WithTimeout(timeout), WithExpiry())
