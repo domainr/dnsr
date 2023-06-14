@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/miekg/dns"
@@ -29,6 +30,11 @@ var (
 	ErrTimeout      = fmt.Errorf("timeout expired") // TODO: Timeouter interface? e.g. func (e) Timeout() bool { return true }
 )
 
+// A ContextDialer implements the DialContext method, e.g. net.Dialer.
+type ContextDialer interface {
+	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
+}
+
 // Option specifies a configuration option for a Resolver.
 type Option func(*Resolver)
 
@@ -36,6 +42,13 @@ type Option func(*Resolver)
 func WithCache(cap int) Option {
 	return func(r *Resolver) {
 		r.capacity = cap
+	}
+}
+
+// WithDialer specifies a network dialer.
+func WithDialer(d ContextDialer) Option {
+	return func(r *Resolver) {
+		r.dialer = d
 	}
 }
 
@@ -56,6 +69,7 @@ func WithTimeout(timeout time.Duration) Option {
 
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
+	dialer   ContextDialer
 	timeout  time.Duration
 	cache    *cache
 	capacity int
@@ -280,6 +294,8 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 	return nil, ErrNoARecords
 }
 
+var dialerDefault = &net.Dialer{}
+
 func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string, depth int) (RRs, error) {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
@@ -299,8 +315,23 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		timeout = dl.Sub(start)
 	}
 
-	client := &dns.Client{Timeout: timeout} // client must finish within remaining timeout
-	rmsg, dur, err := client.Exchange(&qmsg, ip+":53")
+	// client must finish within remaining timeout
+	client := &dns.Client{Timeout: timeout}
+
+	dialer := r.dialer
+	if dialer == nil {
+		dialer = dialerDefault
+	}
+
+	addr := net.JoinHostPort(ip, "53")
+	conn, err := dialer.DialContext(ctx, "udp", addr)
+	var rmsg *dns.Msg
+	var dur time.Duration
+	if err == nil {
+		dconn := &dns.Conn{Conn: conn}
+		rmsg, dur, err = client.ExchangeWithConn(&qmsg, dconn)
+	}
+
 	select {
 	case <-ctx.Done(): // Finished too late
 		logCancellation(host, &qmsg, rmsg, depth, dur, timeout)
