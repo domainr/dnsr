@@ -78,9 +78,9 @@ type Resolver struct {
 
 // NewResolver returns an initialized Resolver with options.
 // By default, the returned Resolver will have cache capacity 0
-// and no timeout.
+// and the default network timeout (Timeout).
 func NewResolver(options ...Option) *Resolver {
-	r := &Resolver{}
+	r := &Resolver{timeout: Timeout}
 	for _, o := range options {
 		o(r)
 	}
@@ -91,7 +91,7 @@ func NewResolver(options ...Option) *Resolver {
 // New initializes a Resolver with the specified cache size.
 // Deprecated: use NewResolver with Option(s) instead.
 func New(cap int) *Resolver {
-	return NewResolver(WithCache(cap), WithTimeout(Timeout))
+	return NewResolver(WithCache(cap))
 }
 
 // NewWithTimeout initializes a Resolver with the specified cache size and timeout.
@@ -103,7 +103,7 @@ func NewWithTimeout(cap int, timeout time.Duration) *Resolver {
 // NewExpiring initializes an expiring Resolver with the specified cache size.
 // Deprecated: use NewResolver with Option(s) instead.
 func NewExpiring(cap int) *Resolver {
-	return NewExpiringWithTimeout(cap, Timeout)
+	return NewResolver(WithCache(cap), WithExpiry())
 }
 
 // NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and timeout.
