@@ -330,6 +330,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 	if err == nil {
 		dconn := &dns.Conn{Conn: conn}
 		rmsg, dur, err = client.ExchangeWithConn(&qmsg, dconn)
+		conn.Close()
 	}
 
 	select {
