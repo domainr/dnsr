@@ -329,7 +329,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 	var dur time.Duration
 	if err == nil {
 		dconn := &dns.Conn{Conn: conn}
-		rmsg, dur, err = client.ExchangeWithConn(&qmsg, dconn)
+		rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
 		conn.Close()
 	}
 
