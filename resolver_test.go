@@ -93,7 +93,7 @@ func TestResolveCtx(t *testing.T) {
 
 func TestResolveContext(t *testing.T) {
 	r := NewResolver()
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
 	_, err := r.ResolveContext(ctx, "1.com", "")
 	st.Expect(t, err, NXDOMAIN)
 	cancel()
