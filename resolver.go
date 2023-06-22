@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/miekg/dns"
@@ -29,41 +30,86 @@ var (
 	ErrTimeout      = fmt.Errorf("timeout expired") // TODO: Timeouter interface? e.g. func (e) Timeout() bool { return true }
 )
 
+// A ContextDialer implements the DialContext method, e.g. net.Dialer.
+type ContextDialer interface {
+	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
+}
+
+// Option specifies a configuration option for a Resolver.
+type Option func(*Resolver)
+
+// WithCache specifies a cache with capacity cap.
+func WithCache(cap int) Option {
+	return func(r *Resolver) {
+		r.capacity = cap
+	}
+}
+
+// WithDialer specifies a network dialer.
+func WithDialer(d ContextDialer) Option {
+	return func(r *Resolver) {
+		r.dialer = d
+	}
+}
+
+// WithExpiry specifies that the Resolver will delete stale cache entries.
+func WithExpiry() Option {
+	return func(r *Resolver) {
+		r.expire = true
+	}
+}
+
+// WithTimeout specifies the timeout for network operations.
+// The default value is Timeout.
+func WithTimeout(timeout time.Duration) Option {
+	return func(r *Resolver) {
+		r.timeout = timeout
+	}
+}
+
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
-	cache   *cache
-	expire  bool
-	timeout time.Duration
+	dialer   ContextDialer
+	timeout  time.Duration
+	cache    *cache
+	capacity int
+	expire   bool
+}
+
+// NewResolver returns an initialized Resolver with options.
+// By default, the returned Resolver will have cache capacity 0
+// and the default network timeout (Timeout).
+func NewResolver(options ...Option) *Resolver {
+	r := &Resolver{timeout: Timeout}
+	for _, o := range options {
+		o(r)
+	}
+	r.cache = newCache(r.capacity, r.expire)
+	return r
 }
 
 // New initializes a Resolver with the specified cache size.
-func New(capacity int) *Resolver {
-	return NewWithTimeout(capacity, Timeout)
+// Deprecated: use NewResolver with Option(s) instead.
+func New(cap int) *Resolver {
+	return NewResolver(WithCache(cap))
 }
 
-// NewWithTimeout initializes a Resolver with the specified cache size and resolution timeout.
-func NewWithTimeout(capacity int, timeout time.Duration) *Resolver {
-	r := &Resolver{
-		cache:   newCache(capacity, false),
-		expire:  false,
-		timeout: timeout,
-	}
-	return r
+// NewWithTimeout initializes a Resolver with the specified cache size and timeout.
+// Deprecated: use NewResolver with Option(s) instead.
+func NewWithTimeout(cap int, timeout time.Duration) *Resolver {
+	return NewResolver(WithCache(cap), WithTimeout(timeout))
 }
 
 // NewExpiring initializes an expiring Resolver with the specified cache size.
-func NewExpiring(capacity int) *Resolver {
-	return NewExpiringWithTimeout(capacity, Timeout)
+// Deprecated: use NewResolver with Option(s) instead.
+func NewExpiring(cap int) *Resolver {
+	return NewResolver(WithCache(cap), WithExpiry())
 }
 
-// NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and resolution timeout.
-func NewExpiringWithTimeout(capacity int, timeout time.Duration) *Resolver {
-	r := &Resolver{
-		cache:   newCache(capacity, true),
-		expire:  true,
-		timeout: timeout,
-	}
-	return r
+// NewExpiringWithTimeout initializes an expiring Resolved with the specified cache size and timeout.
+// Deprecated: use NewResolver with Option(s) instead.
+func NewExpiringWithTimeout(cap int, timeout time.Duration) *Resolver {
+	return NewResolver(WithCache(cap), WithTimeout(timeout), WithExpiry())
 }
 
 // Resolve calls ResolveErr to find DNS records of type qtype for the domain qname.
@@ -95,7 +141,18 @@ func (r *Resolver) ResolveErr(qname, qtype string) (RRs, error) {
 // For nonexistent domains, it will return an NXDOMAIN error.
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, SOA, and TXT).
+// Deprecated: use ResolveContext.
 func (r *Resolver) ResolveCtx(ctx context.Context, qname, qtype string) (RRs, error) {
+	return r.ResolveContext(ctx, qname, qtype)
+}
+
+// ResolveContext finds DNS records of type qtype for the domain qname using
+// the supplied context. Requests may time out earlier if timeout is
+// shorter than a deadline set in ctx.
+// For nonexistent domains, it will return an NXDOMAIN error.
+// Specify an empty string in qtype to receive any DNS records found
+// (currently A, AAAA, NS, CNAME, SOA, and TXT).
+func (r *Resolver) ResolveContext(ctx context.Context, qname, qtype string) (RRs, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 	return r.resolve(ctx, toLowerFQDN(qname), qtype, 0)
@@ -237,6 +294,8 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 	return nil, ErrNoARecords
 }
 
+var dialerDefault = &net.Dialer{}
+
 func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string, depth int) (RRs, error) {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
@@ -256,8 +315,24 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		timeout = dl.Sub(start)
 	}
 
-	client := &dns.Client{Timeout: timeout} // client must finish within remaining timeout
-	rmsg, dur, err := client.Exchange(&qmsg, ip+":53")
+	// client must finish within remaining timeout
+	client := &dns.Client{Timeout: timeout}
+
+	dialer := r.dialer
+	if dialer == nil {
+		dialer = dialerDefault
+	}
+
+	addr := net.JoinHostPort(ip, "53")
+	conn, err := dialer.DialContext(ctx, "udp", addr)
+	var rmsg *dns.Msg
+	var dur time.Duration
+	if err == nil {
+		dconn := &dns.Conn{Conn: conn}
+		rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
+		conn.Close()
+	}
+
 	select {
 	case <-ctx.Done(): // Finished too late
 		logCancellation(host, &qmsg, rmsg, depth, dur, timeout)
