@@ -12,6 +12,29 @@ import (
 	"github.com/nbio/st"
 )
 
+func CheckTXT(t *testing.T, domain string) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr(domain, "TXT")
+	st.Expect(t, err, nil)
+
+	rrs2, err := net.LookupTXT(domain)
+	st.Expect(t, err, nil)
+	for _, rr := range rrs2 {
+		exsists := false
+		for _, rr2 := range rrs {
+			if rr2.Type == "TXT" && rr == rr2.Value {
+				exsists = true
+			}
+		}
+		if !exsists {
+			t.Errorf("TXT record %q not found", rr)
+		}
+	}
+	if count(rrs, func(rr RR) bool { return rr.Type == "TXT" }) != len(rrs2) {
+		t.Errorf("TXT record count mismatch: %d != %d", count(rrs, func(rr RR) bool { return rr.Type == "TXT" }), len(rrs2))
+	}
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 	timeout := os.Getenv("DNSR_TIMEOUT")
@@ -171,12 +194,11 @@ func TestGoogleMulti(t *testing.T) {
 }
 
 func TestGoogleTXT(t *testing.T) {
-	r := NewResolver()
-	rrs, err := r.ResolveErr("google.com", "TXT")
-	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 4, true)
-	// Google will have at least an SPF record, but might transiently have verification records too.
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "TXT" }) >= 1, true)
+	CheckTXT(t, "google.com")
+}
+
+func TestCloudflareTXT(t *testing.T) {
+	CheckTXT(t, "cloudflare.com")
 }
 
 func TestAppleA(t *testing.T) {
