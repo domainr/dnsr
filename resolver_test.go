@@ -30,8 +30,9 @@ func CheckTXT(t *testing.T, domain string) {
 			t.Errorf("TXT record %q not found", rr)
 		}
 	}
-	if count(rrs, func(rr RR) bool { return rr.Type == "TXT" }) != len(rrs2) {
-		t.Errorf("TXT record count mismatch: %d != %d", count(rrs, func(rr RR) bool { return rr.Type == "TXT" }), len(rrs2))
+	c := count(rrs, func(rr RR) bool { return rr.Type == "TXT" })
+	if c != len(rrs2) {
+		t.Errorf("TXT record count mismatch: %d != %d", c, len(rrs2))
 	}
 }
 
