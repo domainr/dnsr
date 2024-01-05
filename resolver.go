@@ -67,6 +67,15 @@ func WithTimeout(timeout time.Duration) Option {
 	}
 }
 
+// WithTCPRetry specifies that requests should be retried with TCP if responses
+// are truncated. The retry must still complete within the timeout or context deadline.
+func WithTCPRetry() Option {
+	return func(r *Resolver) {
+		r.tcpRetry = true
+	}
+}
+
+
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
 	dialer   ContextDialer
@@ -74,6 +83,7 @@ type Resolver struct {
 	cache    *cache
 	capacity int
 	expire   bool
+	tcpRetry bool
 }
 
 // NewResolver returns an initialized Resolver with options.
@@ -331,6 +341,22 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		dconn := &dns.Conn{Conn: conn}
 		rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
 		conn.Close()
+	}
+	if r.tcpRetry && rmsg != nil && rmsg.MsgHdr.Truncated {
+		// Since we are doing another query, we need to recheck the deadline
+		if dl, ok := ctx.Deadline(); ok {
+			if start.After(dl.Add(-TypicalResponseTime)) { // bail if we can't finish in time (start is too close to deadline)
+				return nil, ErrTimeout
+			}
+			timeout = dl.Sub(start)
+		}
+		// Retry with TCP
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			dconn := &dns.Conn{Conn: conn}
+			rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
+			conn.Close()
+		}
 	}
 
 	select {

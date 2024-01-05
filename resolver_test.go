@@ -179,6 +179,19 @@ func TestGoogleTXT(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "TXT" }) >= 1, true)
 }
 
+func TestGoogleTXTTCPRetry(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr("google.com", "TXT")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 4, true)
+
+	r2 := NewResolver(WithTCPRetry())
+	rrs2, err := r2.ResolveErr("google.com", "TXT")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs2) > len(rrs), true)
+}
+
+
 func TestAppleA(t *testing.T) {
 	r := NewResolver()
 	rrs, err := r.ResolveErr("apple.com", "A")
