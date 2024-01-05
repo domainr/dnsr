@@ -20,13 +20,13 @@ func CheckTXT(t *testing.T, domain string) {
 	rrs2, err := net.LookupTXT(domain)
 	st.Expect(t, err, nil)
 	for _, rr := range rrs2 {
-		exsists := false
+		exists := false
 		for _, rr2 := range rrs {
 			if rr2.Type == "TXT" && rr == rr2.Value {
-				exsists = true
+				exists = true
 			}
 		}
-		if !exsists {
+		if !exists {
 			t.Errorf("TXT record %q not found", rr)
 		}
 	}
