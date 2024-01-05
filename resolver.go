@@ -332,6 +332,15 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
 		conn.Close()
 	}
+	if rmsg.MsgHdr.Truncated {
+		// Retry with TCP
+		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			dconn := &dns.Conn{Conn: conn}
+			rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
+			conn.Close()
+		}
+	}
 
 	select {
 	case <-ctx.Done(): // Finished too late
