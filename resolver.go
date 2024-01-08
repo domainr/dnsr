@@ -332,7 +332,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
 		conn.Close()
 	}
-	if rmsg.MsgHdr.Truncated {
+	if rmsg != nil && rmsg.MsgHdr.Truncated {
 		// Since we are doing another query, we need to recheck the deadline
 		if dl, ok := ctx.Deadline(); ok {
 			if start.After(dl.Add(-TypicalResponseTime)) { // bail if we can't finish in time (start is too close to deadline)
