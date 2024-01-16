@@ -180,7 +180,7 @@ func (r *Resolver) resolve(ctx context.Context, qname, qtype string, depth int) 
 func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, depth int) (RRs, error) {
 	chanRRs := make(chan RRs, MaxNameservers)
 	chanErrs := make(chan error, MaxNameservers)
-	child_ctx, cancel := context.WithCancel(ctx)
+	childCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	for pname, ok := qname, true; ok; pname, ok = parent(pname) {
 		// If we’re looking for [foo.com,NS], then move on to the parent ([com,NS])
@@ -195,7 +195,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 		}
 
 		// Get nameservers
-		nrrs, err := r.resolve(child_ctx, pname, "NS", depth)
+		nrrs, err := r.resolve(childCtx, pname, "NS", depth)
 		if err == NXDOMAIN || err == ErrTimeout || err == context.DeadlineExceeded {
 			return nil, err
 		}
@@ -205,7 +205,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 
 		// Check cache for specific queries
 		if len(nrrs) > 0 && qtype != "" {
-			rrs, err := r.cacheGet(child_ctx, qname, qtype)
+			rrs, err := r.cacheGet(childCtx, qname, qtype)
 			if err != nil {
 				return nil, err
 			}
@@ -223,7 +223,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 			}
 
 			go func(host string) {
-				rrs, err := r.exchange(child_ctx, host, qname, qtype, depth)
+				rrs, err := r.exchange(childCtx, host, qname, qtype, depth)
 				if err != nil {
 					chanErrs <- err
 				} else {
@@ -237,8 +237,8 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 		// Wait for answer, error, or cancellation
 		for ; count > 0; count-- {
 			select {
-			case <-child_ctx.Done():
-				return nil, child_ctx.Err()
+			case <-childCtx.Done():
+				return nil, childCtx.Err()
 			case rrs := <-chanRRs:
 				for _, nrr := range nrrs {
 					if nrr.Name == qname {
