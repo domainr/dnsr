@@ -68,7 +68,7 @@ func WithTimeout(timeout time.Duration) Option {
 }
 
 // WithTCPRetry specifies that requests should be retried with TCP if responses
-// are truncated.
+// are truncated. The retry must still complete within the timeout or context deadline.
 func WithTCPRetry() Option {
 	return func(r *Resolver) {
 		r.tcpRetry = true
