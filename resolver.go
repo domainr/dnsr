@@ -348,7 +348,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 			if start.After(dl.Add(-TypicalResponseTime)) { // bail if we can't finish in time (start is too close to deadline)
 				return nil, ErrTimeout
 			}
-			timeout = dl.Sub(start)
+			client.Timeout = dl.Sub(start)
 		}
 		// Retry with TCP
 		conn, err := dialer.DialContext(ctx, "tcp", addr)
@@ -361,10 +361,10 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 
 	select {
 	case <-ctx.Done(): // Finished too late
-		logCancellation(host, &qmsg, rmsg, depth, dur, timeout)
+		logCancellation(host, &qmsg, rmsg, depth, dur, client.Timeout)
 		return nil, ctx.Err()
 	default:
-		logExchange(host, &qmsg, rmsg, depth, dur, timeout, err) // Log hostname instead of IP
+		logExchange(host, &qmsg, rmsg, depth, dur, client.Timeout, err) // Log hostname instead of IP
 	}
 	if err != nil {
 		return nil, err
