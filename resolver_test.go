@@ -13,7 +13,7 @@ import (
 )
 
 func CheckTXT(t *testing.T, domain string) {
-	r := NewResolver()
+	r := NewResolver(WithTCPRetry())
 	rrs, err := r.ResolveErr(domain, "TXT")
 	st.Expect(t, err, nil)
 
@@ -213,7 +213,6 @@ func TestGoogleTXTTCPRetry(t *testing.T) {
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs2) > len(rrs), true)
 }
-
 
 func TestAppleA(t *testing.T) {
 	r := NewResolver()
