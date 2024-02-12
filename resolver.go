@@ -75,7 +75,6 @@ func WithTCPRetry() Option {
 	}
 }
 
-
 // Resolver implements a primitive, non-recursive, caching DNS resolver.
 type Resolver struct {
 	dialer   ContextDialer
