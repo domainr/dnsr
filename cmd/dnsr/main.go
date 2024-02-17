@@ -14,16 +14,13 @@ import (
 
 var (
 	verbose  bool
-	resolver = dnsr.New(10000)
+	tcpRetry bool
+	resolver = dnsr.NewResolver(dnsr.WithCache(1000))
 )
 
 func init() {
-	flag.BoolVar(
-		&verbose,
-		"v",
-		false,
-		"print verbose info to the console",
-	)
+	flag.BoolVar(&verbose, "v", false, "print verbose info to the console")
+	flag.BoolVar(&tcpRetry, "t", false, "enable TCP retry")
 }
 
 func logV(fmt string, args ...interface{}) {
@@ -46,6 +43,9 @@ func main() {
 		flag.Usage()
 	} else if _, isType := dns.StringToType[args[len(args)-1]]; len(args) > 1 && isType {
 		qtype, args = args[len(args)-1], args[:len(args)-1]
+	}
+	if tcpRetry {
+		resolver = dnsr.NewResolver(dnsr.WithTCPRetry())
 	}
 	if verbose {
 		dnsr.DebugLogger = os.Stderr
