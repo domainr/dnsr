@@ -252,6 +252,21 @@ func TestTTL(t *testing.T) {
 	st.Expect(t, rr.Expiry.IsZero(), false)
 }
 
+func TestCNAMETXT(t *testing.T) {
+	r := NewExpiring(0)
+	rrs, err := r.ResolveErr("355702a0-beac-4944-ae69-73c70d68b5c3.miniwoffer.no", "TXT")
+	st.Expect(t, err, nil)
+	st.Assert(t, len(rrs) >= 1, true)
+	txt_record := false
+	for _, v := range rrs {
+		if v.Type == "TXT" {
+			st.Expect(t, v.Value, "foobar")
+			txt_record = true
+		}
+	}
+	st.Expect(t, txt_record, true)
+}
+
 var testResolver *Resolver
 
 func BenchmarkResolve(b *testing.B) {
