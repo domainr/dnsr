@@ -407,7 +407,7 @@ func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs 
 		crrs, _ := r.resolve(ctx, crr.Value, qtype, depth)
 		for _, rr := range crrs {
 			r.cache.add(qname, rr)
-			rrs = append(rrs, crr)
+			rrs = append(rrs, rr)
 		}
 	}
 	return rrs, nil
