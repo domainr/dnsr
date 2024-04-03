@@ -254,6 +254,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 						rrs = append(rrs, nrr)
 					}
 				}
+				ctx := context.WithoutCancel(ctx)
 				cancel() // stop any other work here before recursing
 				return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
 			case err = <-chanErrs:
@@ -432,7 +433,7 @@ func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs 
 		crrs, _ := r.resolve(ctx, crr.Value, qtype, depth)
 		for _, rr := range crrs {
 			r.cache.add(qname, rr)
-			rrs = append(rrs, crr)
+			rrs = append(rrs, rr)
 		}
 	}
 	return rrs, nil

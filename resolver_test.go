@@ -12,30 +12,6 @@ import (
 	"github.com/nbio/st"
 )
 
-func CheckTXT(t *testing.T, domain string) {
-	r := NewResolver(WithTCPRetry())
-	rrs, err := r.ResolveErr(domain, "TXT")
-	st.Expect(t, err, nil)
-
-	rrs2, err := net.LookupTXT(domain)
-	st.Expect(t, err, nil)
-	for _, rr := range rrs2 {
-		exists := false
-		for _, rr2 := range rrs {
-			if rr2.Type == "TXT" && rr == rr2.Value {
-				exists = true
-			}
-		}
-		if !exists {
-			t.Errorf("TXT record %q not found", rr)
-		}
-	}
-	c := count(rrs, func(rr RR) bool { return rr.Type == "TXT" })
-	if c != len(rrs2) {
-		t.Errorf("TXT record count mismatch: %d != %d", c, len(rrs2))
-	}
-}
-
 func TestMain(m *testing.M) {
 	flag.Parse()
 	timeout := os.Getenv("DNSR_TIMEOUT")
@@ -194,12 +170,21 @@ func TestGoogleMulti(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }), 0)
 }
 
+func TestGoogleCNAME(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr("translate.google.com", "A")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 1, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "CNAME" }), 1)     // resolved first
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true) // records for CNAME target
+}
+
 func TestGoogleTXT(t *testing.T) {
-	CheckTXT(t, "google.com")
+	checkTXT(t, "google.com")
 }
 
 func TestCloudflareTXT(t *testing.T) {
-	CheckTXT(t, "cloudflare.com")
+	checkTXT(t, "cloudflare.com")
 }
 
 func TestGoogleTXTTCPRetry(t *testing.T) {
@@ -285,6 +270,30 @@ func TestTTL(t *testing.T) {
 	st.Assert(t, len(rrs) >= 4, true)
 	rr := rrs[0]
 	st.Expect(t, rr.Expiry.IsZero(), false)
+}
+
+func checkTXT(t *testing.T, domain string) {
+	r := NewResolver(WithTCPRetry())
+	rrs, err := r.ResolveErr(domain, "TXT")
+	st.Expect(t, err, nil)
+
+	rrs2, err := net.LookupTXT(domain)
+	st.Expect(t, err, nil)
+	for _, rr := range rrs2 {
+		exists := false
+		for _, rr2 := range rrs {
+			if rr2.Type == "TXT" && rr == rr2.Value {
+				exists = true
+			}
+		}
+		if !exists {
+			t.Errorf("TXT record %q not found", rr)
+		}
+	}
+	c := count(rrs, func(rr RR) bool { return rr.Type == "TXT" })
+	if c != len(rrs2) {
+		t.Errorf("TXT record count mismatch: %d != %d", c, len(rrs2))
+	}
 }
 
 var testResolver *Resolver
