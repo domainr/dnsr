@@ -1,6 +1,6 @@
 module github.com/domainr/dnsr
 
-go 1.21.0
+go 1.21
 
 require (
 	github.com/miekg/dns v1.1.59
