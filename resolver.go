@@ -256,7 +256,15 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 				}
 				ctx := context.WithoutCancel(ctx)
 				cancel() // stop any other work here before recursing
-				return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
+				res, err := r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
+
+				// for NS queries, return parent NS if we got
+				// no response
+				if res == nil && qtype == "NS" {
+					return nrrs, nil
+				}
+
+				return res, err
 			case err = <-chanErrs:
 				if err == NXDOMAIN {
 					return nil, err
