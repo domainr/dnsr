@@ -1,4 +1,4 @@
-name: Go
+name: Test
 
 on:
   push:
@@ -21,6 +21,9 @@ jobs:
         uses: actions/setup-go@v5.0.2
         with:
           go-version: ^1
+
+      - name: Update root cache
+        run: go generate -v -x
 
       - name: Vet Go code
         run: go vet ./...
