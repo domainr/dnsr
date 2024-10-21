@@ -139,6 +139,17 @@ func TestGooglePTR(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "PTR" }) >= 1, true)
 }
 
+func TestGooglePTRTwoLabelsDownDelegated(t *testing.T) {
+	r := NewResolver()
+	// Also check +2 labels down delegation since
+	// 8.8.8.in-addr.arpa is delegated directly from 8.in-addr.arpa (no intermediary 8.8.in-addr.arpa zone)
+	rrs, err := r.ResolveErr("8.8.8.8.in-addr.arpa", "PTR")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) == 1, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "PTR" }) == 1, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Value == "dns.google." }) == 1, true)
+}
+
 func TestGoogleMX(t *testing.T) {
 	r := NewResolver()
 	rrs, err := r.ResolveErr("google.com", "MX")
