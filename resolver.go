@@ -250,7 +250,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 				return nil, ctx.Err()
 			case rrs := <-chanRRs:
 				for _, nrr := range nrrs {
-					if nrr.Name == qname {
+					if nrr.Name == qname && nrr.Type == "NS" {
 						rrs = append(rrs, nrr)
 					}
 				}
@@ -440,7 +440,7 @@ func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs 
 		logCNAME(crr.String(), depth)
 		crrs, _ := r.resolve(ctx, crr.Value, qtype, depth)
 		for _, rr := range crrs {
-			r.cache.add(qname, rr)
+			r.cache.add(rr.Name, rr)
 			rrs = append(rrs, rr)
 		}
 	}
