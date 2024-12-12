@@ -250,13 +250,21 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 				return nil, ctx.Err()
 			case rrs := <-chanRRs:
 				for _, nrr := range nrrs {
-					if nrr.Name == qname {
+					if nrr.Name == qname && nrr.Type == "NS" {
 						rrs = append(rrs, nrr)
 					}
 				}
 				ctx := context.WithoutCancel(ctx)
 				cancel() // stop any other work here before recursing
-				return r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
+				res, err := r.resolveCNAMEs(ctx, qname, qtype, rrs, depth)
+
+				// for NS queries, return parent NS if we got
+				// no response
+				if res == nil && qtype == "NS" {
+					return nrrs, nil
+				}
+
+				return res, err
 			case err = <-chanErrs:
 				if err == NXDOMAIN {
 					return nil, err
@@ -432,7 +440,7 @@ func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs 
 		logCNAME(crr.String(), depth)
 		crrs, _ := r.resolve(ctx, crr.Value, qtype, depth)
 		for _, rr := range crrs {
-			r.cache.add(qname, rr)
+			r.cache.add(rr.Name, rr)
 			rrs = append(rrs, rr)
 		}
 	}
