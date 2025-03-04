@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -146,6 +147,37 @@ func TestGoogleMX(t *testing.T) {
 	st.Expect(t, len(rrs) >= 4, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "MX" }) >= 1, true)
+}
+
+func TestGoogleSOA(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveContext(context.Background(), "google.com", "SOA", WithRNAME(true))
+	st.Expect(t, err, nil)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "SOA" }) == 1, true)
+
+	// validate the soa record contains the MNAME and RNAME values split by a space
+	st.Expect(t, count(rrs, func(rr RR) bool {
+		if rr.Type == "SOA" {
+			if len(strings.Split(rr.Value, " ")) == 2 {
+				return true
+			}
+		}
+		return false
+	}) == 1, true)
+
+	rrs, err = r.ResolveContext(context.Background(), "cloudflare.com", "SOA")
+	st.Expect(t, err, nil)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "SOA" }) == 1, true)
+
+	// validate the soa record only contains MNAME value
+	st.Expect(t, count(rrs, func(rr RR) bool {
+		if rr.Type == "SOA" {
+			if len(strings.Split(rr.Value, " ")) == 2 {
+				return true
+			}
+		}
+		return false
+	}) == 0, true)
 }
 
 func TestGoogleAny(t *testing.T) {
