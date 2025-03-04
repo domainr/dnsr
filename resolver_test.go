@@ -158,7 +158,7 @@ func TestGoogleSOA(t *testing.T) {
 	// validate the soa record contains the MNAME and RNAME values split by a space
 	st.Expect(t, count(rrs, func(rr RR) bool {
 		if rr.Type == "SOA" {
-			if len(strings.Split(rr.Value, " ")) == 2 {
+			if len(strings.Fields(rr.Value)) == 2 {
 				return true
 			}
 		}
@@ -172,7 +172,7 @@ func TestGoogleSOA(t *testing.T) {
 	// validate the soa record only contains MNAME value
 	st.Expect(t, count(rrs, func(rr RR) bool {
 		if rr.Type == "SOA" {
-			if len(strings.Split(rr.Value, " ")) == 2 {
+			if len(strings.Fields(rr.Value)) == 2 {
 				return true
 			}
 		}
