@@ -123,8 +123,9 @@ func NewExpiringWithTimeout(cap int, timeout time.Duration) *Resolver {
 
 // Resolve calls ResolveErr to find DNS records of type qtype for the domain qname.
 // For nonexistent domains (NXDOMAIN), it will return an empty, non-nil slice.
-func (r *Resolver) Resolve(qname, qtype string) RRs {
-	rrs, err := r.ResolveErr(qname, qtype)
+// Specify rrOpts to control the value returned in an RR
+func (r *Resolver) Resolve(qname, qtype string, rrOpts ...RrOption) RRs {
+	rrs, err := r.ResolveErr(qname, qtype, rrOpts...)
 	if err == NXDOMAIN {
 		return emptyRRs
 	}
@@ -138,10 +139,11 @@ func (r *Resolver) Resolve(qname, qtype string) RRs {
 // For nonexistent domains, it will return an NXDOMAIN error.
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, SOA, and TXT).
-func (r *Resolver) ResolveErr(qname, qtype string) (RRs, error) {
+// Specify rrOpts to control the value returned in an RR
+func (r *Resolver) ResolveErr(qname, qtype string, rrOpts ...RrOption) (RRs, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), r.timeout)
 	defer cancel()
-	return r.resolve(ctx, toLowerFQDN(qname), qtype, 0)
+	return r.resolve(ctx, toLowerFQDN(qname), qtype, 0, rrOpts...)
 }
 
 // ResolveCtx finds DNS records of type qtype for the domain qname using
@@ -161,13 +163,14 @@ func (r *Resolver) ResolveCtx(ctx context.Context, qname, qtype string) (RRs, er
 // For nonexistent domains, it will return an NXDOMAIN error.
 // Specify an empty string in qtype to receive any DNS records found
 // (currently A, AAAA, NS, CNAME, SOA, and TXT).
-func (r *Resolver) ResolveContext(ctx context.Context, qname, qtype string) (RRs, error) {
+// Specify rrOpts to control the value returned in an RR
+func (r *Resolver) ResolveContext(ctx context.Context, qname, qtype string, rrOpts ...RrOption) (RRs, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
-	return r.resolve(ctx, toLowerFQDN(qname), qtype, 0)
+	return r.resolve(ctx, toLowerFQDN(qname), qtype, 0, rrOpts...)
 }
 
-func (r *Resolver) resolve(ctx context.Context, qname, qtype string, depth int) (RRs, error) {
+func (r *Resolver) resolve(ctx context.Context, qname, qtype string, depth int, rrOpts ...RrOption) (RRs, error) {
 	if depth++; depth > MaxRecursion {
 		logMaxRecursion(qname, qtype, depth)
 		return nil, ErrMaxRecursion
@@ -181,12 +184,12 @@ func (r *Resolver) resolve(ctx context.Context, qname, qtype string, depth int) 
 	}
 	logResolveStart(qname, qtype, depth)
 	start := time.Now()
-	rrs, err = r.iterateParents(ctx, qname, qtype, depth)
+	rrs, err = r.iterateParents(ctx, qname, qtype, depth, rrOpts...)
 	logResolveEnd(qname, qtype, rrs, depth, start, err)
 	return rrs, err
 }
 
-func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, depth int) (RRs, error) {
+func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, depth int, rrOpts ...RrOption) (RRs, error) {
 	chanRRs := make(chan RRs, MaxNameservers)
 	chanErrs := make(chan error, MaxNameservers)
 	ctx, cancel := context.WithCancel(ctx)
@@ -204,7 +207,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 		}
 
 		// Get nameservers
-		nrrs, err := r.resolve(ctx, pname, "NS", depth)
+		nrrs, err := r.resolve(ctx, pname, "NS", depth, rrOpts...)
 		if err == NXDOMAIN || err == ErrTimeout || err == context.DeadlineExceeded {
 			return nil, err
 		}
@@ -232,7 +235,7 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 			}
 
 			go func(host string) {
-				rrs, err := r.exchange(ctx, host, qname, qtype, depth)
+				rrs, err := r.exchange(ctx, host, qname, qtype, depth, rrOpts...)
 				if err != nil {
 					chanErrs <- err
 				} else {
@@ -274,9 +277,9 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 	return nil, ErrNoResponse
 }
 
-func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, depth int) (RRs, error) {
+func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, depth int, rrOpts ...RrOption) (RRs, error) {
 	count := 0
-	arrs, err := r.resolve(ctx, host, "A", depth)
+	arrs, err := r.resolve(ctx, host, "A", depth, rrOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +294,7 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 			return nil, ErrMaxIPs
 		}
 
-		rrs, err := r.exchangeIP(ctx, host, arr.Value, qname, qtype, depth)
+		rrs, err := r.exchangeIP(ctx, host, arr.Value, qname, qtype, depth, rrOpts...)
 		if err == nil || err == NXDOMAIN || err == ErrTimeout {
 			return rrs, err
 		}
@@ -306,7 +309,7 @@ func (r *Resolver) exchange(ctx context.Context, host, qname, qtype string, dept
 
 var dialerDefault = &net.Dialer{}
 
-func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string, depth int) (RRs, error) {
+func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string, depth int, rrOpts ...RrOption) (RRs, error) {
 	dtype := dns.StringToType[qtype]
 	if dtype == 0 {
 		dtype = dns.TypeA
@@ -375,7 +378,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 		var hasSOA bool
 		if qtype == "NS" {
 			for _, drr := range rmsg.Ns {
-				rr, ok := convertRR(drr, r.expire)
+				rr, ok := convertRR(drr, r.expire, rrOpts...)
 				if !ok {
 					continue
 				}
@@ -394,7 +397,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 	}
 
 	// Cache records returned
-	rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
+	rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...), rrOpts...)
 
 	// Resolve IP addresses of TLD name servers if NS query doesn’t return additional section
 	if qtype == "NS" {
@@ -410,7 +413,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 				break
 			}
 			if len(arrs) == 0 {
-				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
+				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1, rrOpts...)
 				if err != nil {
 					break
 				}
@@ -422,7 +425,7 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 	return rrs, nil
 }
 
-func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs RRs, depth int) (RRs, error) {
+func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs RRs, depth int, rrOpts ...RrOption) (RRs, error) {
 	var rrs RRs
 	for _, crr := range crrs {
 		rrs = append(rrs, crr)
@@ -430,7 +433,7 @@ func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs 
 			continue
 		}
 		logCNAME(crr.String(), depth)
-		crrs, _ := r.resolve(ctx, crr.Value, qtype, depth)
+		crrs, _ := r.resolve(ctx, crr.Value, qtype, depth, rrOpts...)
 		for _, rr := range crrs {
 			r.cache.add(qname, rr)
 			rrs = append(rrs, rr)
@@ -440,11 +443,11 @@ func (r *Resolver) resolveCNAMEs(ctx context.Context, qname, qtype string, crrs 
 }
 
 // saveDNSRR saves 1 or more DNS records to the resolver cache.
-func (r *Resolver) saveDNSRR(host, qname string, drrs []dns.RR) RRs {
+func (r *Resolver) saveDNSRR(host, qname string, drrs []dns.RR, rrOpts ...RrOption) RRs {
 	var rrs RRs
 	cl := dns.CountLabel(qname)
 	for _, drr := range drrs {
-		rr, ok := convertRR(drr, r.expire)
+		rr, ok := convertRR(drr, r.expire, rrOpts...)
 		if !ok {
 			continue
 		}

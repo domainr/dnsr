@@ -17,6 +17,21 @@ type RR struct {
 	Expiry time.Time
 }
 
+// RrOption represents options for controlling the value returned in an RR
+type RrOption func(option *rrOption)
+
+// rrOption contains options for controlling the value returned in an RR
+type rrOption struct {
+	includeRNAME bool
+}
+
+// WithRNAME returns the RNAME along with the MNAME when returning a SOA record
+func WithRNAME(includeRNAME bool) RrOption {
+	return func(option *rrOption) {
+		option.includeRNAME = includeRNAME
+	}
+}
+
 // RRs represents a slice of DNS resource records.
 type RRs []RR
 
@@ -52,15 +67,25 @@ func ttlString(ttl time.Duration) string {
 // If the RR is not a type that this package uses,
 // It will attempt to translate this if there are enough parameters
 // Should all translation fail, it returns an undefined RR and false.
-func convertRR(drr dns.RR, expire bool) (RR, bool) {
+// opts contains options for converting a dns RR into an RR
+func convertRR(drr dns.RR, expire bool, opts ...RrOption) (RR, bool) {
 	var ttl time.Duration
 	var expiry time.Time
 	if expire {
 		ttl, expiry = calculateExpiry(drr)
 	}
+
+	option := &rrOption{}
+	for _, opt := range opts {
+		opt(option)
+	}
 	switch t := drr.(type) {
 	case *dns.SOA:
-		return RR{toLowerFQDN(t.Hdr.Name), "SOA", toLowerFQDN(t.Ns), ttl, expiry}, true
+		val := toLowerFQDN(t.Ns)
+		if option.includeRNAME {
+			val = fmt.Sprintf("%s %s", val, t.Mbox)
+		}
+		return RR{toLowerFQDN(t.Hdr.Name), "SOA", val, ttl, expiry}, true
 	case *dns.NS:
 		return RR{toLowerFQDN(t.Hdr.Name), "NS", toLowerFQDN(t.Ns), ttl, expiry}, true
 	case *dns.CNAME:
