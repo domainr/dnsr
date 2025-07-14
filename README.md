@@ -1,6 +1,6 @@
 # dnsr
 
-[![build status](https://img.shields.io/github/actions/workflow/status/domainr/dnsr/go.yaml.svg)](https://github.com/domainr/dnsr/actions)
+[![build status](https://img.shields.io/github/actions/workflow/status/domainr/dnsr/test.yaml.svg)](https://github.com/domainr/dnsr/actions)
 [![go.dev reference](https://img.shields.io/badge/go.dev-reference-blue.svg?logo=go&logoColor=white)](https://pkg.go.dev/github.com/domainr/dnsr)
 
 Iterative DNS resolver for [Go](https://golang.org/).
