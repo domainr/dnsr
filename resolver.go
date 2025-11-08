@@ -410,9 +410,23 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 				break
 			}
 			if len(arrs) == 0 {
-				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
-				if err != nil {
-					break
+				if !dns.IsSubDomain(host, rr.Value) {
+					// we get referrals
+					referralRRs, err := r.resolve(ctx, rr.Value, "A", depth+1)
+					if err == NXDOMAIN {
+						// try contact the next nameserver
+						continue
+					}
+					if err != nil {
+						break
+					}
+
+					arrs = referralRRs
+				} else {
+					arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
+					if err != nil {
+						break
+					}
 				}
 			}
 			rrs = append(rrs, arrs...)
