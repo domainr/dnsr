@@ -350,3 +350,12 @@ func all(rrs RRs, f func(RR) bool) (out bool) {
 	}
 	return true
 }
+
+func TestReferral(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr("pnnl.gov", "A")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) == 3, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) == 2, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) == 1, true)
+}
