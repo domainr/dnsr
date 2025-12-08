@@ -396,7 +396,11 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 	// Cache records returned
 	rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
 
-	// Resolve IP addresses of TLD name servers if NS query doesn’t return additional section
+	// Resolve IP addresses of nameservers if the response didn't include glue records.
+	// This handles out-of-bailiwick (OOB) referrals where the nameserver is outside the
+	// queried domain's hierarchy (e.g., pnnl.gov using adns1.es.net as its NS).
+	// In OOB cases, the parent zone's server cannot provide glue records, so we must
+	// resolve the NS address separately. See https://github.com/domainr/dnsr/issues/174
 	if qtype == "NS" {
 		for _, rr := range rrs {
 			if rr.Type != "NS" {
