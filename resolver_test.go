@@ -326,6 +326,14 @@ func testResolveErr() {
 	testResolver.ResolveErr("us-east-1-a.route.herokuapp.com", "")
 }
 
+// BenchmarkResolveOOB benchmarks resolution of domains with out-of-bailiwick nameservers.
+func BenchmarkResolveOOB(b *testing.B) {
+	testResolver = NewResolver()
+	for i := 0; i < b.N; i++ {
+		testResolver.ResolveErr("pnnl.gov", "A")
+	}
+}
+
 func count(rrs RRs, f func(RR) bool) (out int) {
 	for _, rr := range rrs {
 		if f(rr) {
