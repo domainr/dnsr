@@ -410,23 +410,22 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 				break
 			}
 			if len(arrs) == 0 {
-				if !dns.IsSubDomain(host, rr.Value) {
-					// we get referrals
-					referralRRs, err := r.resolve(ctx, rr.Value, "A", depth+1)
+				// Try asking the current nameserver for the NS's A record (fast path).
+				// This works when glue records are available or the NS is in-bailiwick.
+				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
+				if err == NXDOMAIN {
+					// The nameserver returned NXDOMAIN, which likely means out-of-bailiwick
+					// (e.g., asking a .gov server for a .net address). This NXDOMAIN is
+					// not authoritative, so remove it from cache and resolve from root instead.
+					r.cache.deleteNX(rr.Value)
+					arrs, err = r.resolve(ctx, rr.Value, "A", depth+1)
 					if err == NXDOMAIN {
-						// try contact the next nameserver
+						// NS truly doesn't exist, try the next nameserver
 						continue
 					}
-					if err != nil {
-						break
-					}
-
-					arrs = referralRRs
-				} else {
-					arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
-					if err != nil {
-						break
-					}
+				}
+				if err != nil {
+					break
 				}
 			}
 			rrs = append(rrs, arrs...)

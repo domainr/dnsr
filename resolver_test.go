@@ -351,11 +351,30 @@ func all(rrs RRs, f func(RR) bool) (out bool) {
 	return true
 }
 
+// TestReferral tests out-of-bailiwick (OOB) nameserver resolution.
+// pnnl.gov uses nameservers in .net (adns1.es.net, adns2.es.net),
+// which .gov nameservers cannot provide glue records for.
+// See https://github.com/domainr/dnsr/issues/174
 func TestReferral(t *testing.T) {
 	r := NewResolver()
 	rrs, err := r.ResolveErr("pnnl.gov", "A")
 	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) == 3, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) == 2, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) == 1, true)
+	st.Expect(t, len(rrs) >= 3, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true)
+}
+
+// TestReferralOtherDomains tests other domains from issue #174.
+func TestReferralOtherDomains(t *testing.T) {
+	r := NewResolver()
+	for _, domain := range []string{"lbl.gov", "nrel.gov"} {
+		rrs, err := r.ResolveErr(domain, "A")
+		if err != nil {
+			t.Errorf("%s: %v", domain, err)
+			continue
+		}
+		if len(rrs) == 0 {
+			t.Errorf("%s: no records returned", domain)
+		}
+	}
 }

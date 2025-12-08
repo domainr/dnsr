@@ -46,6 +46,17 @@ func (c *cache) addNX(qname string) {
 	c._addEntry(qname)
 }
 
+// deleteNX removes an NXDOMAIN entry from the cache if it exists.
+// This is used to remove NXDOMAIN entries from servers that are not authoritative for the queried domain.
+// Safe for concurrent usage.
+func (c *cache) deleteNX(qname string) {
+	c.m.Lock()
+	defer c.m.Unlock()
+	if e, ok := c.entries[qname]; ok && e == nil {
+		delete(c.entries, qname)
+	}
+}
+
 // _add does NOT lock the mutex so unsafe for concurrent usage.
 func (c *cache) _add(qname string, rr RR) {
 	e, ok := c.entries[qname]
