@@ -6,7 +6,7 @@ on:
       - main
   pull_request:
 
-jobs:          
+jobs:
   test:
     name: Test
     runs-on: ubuntu-22.04
@@ -41,7 +41,7 @@ jobs:
 
       - name: Test Go code
         env:
-          DNSR_TIMEOUT: 5s
+          DNSR_TIMEOUT: 10s
         run: go test -v -race ./...
 
       - name: Verify repo is unchanged
