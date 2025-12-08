@@ -425,7 +425,8 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 					}
 				}
 				if err != nil {
-					break
+					// On timeout or other transient errors, try the next nameserver
+					continue
 				}
 			}
 			rrs = append(rrs, arrs...)
