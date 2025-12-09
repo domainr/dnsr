@@ -326,6 +326,14 @@ func testResolveErr() {
 	testResolver.ResolveErr("us-east-1-a.route.herokuapp.com", "")
 }
 
+// BenchmarkResolveOOB benchmarks resolution of domains with out-of-bailiwick nameservers.
+func BenchmarkResolveOOB(b *testing.B) {
+	testResolver = NewResolver()
+	for i := 0; i < b.N; i++ {
+		testResolver.ResolveErr("pnnl.gov", "A")
+	}
+}
+
 func count(rrs RRs, f func(RR) bool) (out int) {
 	for _, rr := range rrs {
 		if f(rr) {
@@ -349,4 +357,32 @@ func all(rrs RRs, f func(RR) bool) (out bool) {
 		}
 	}
 	return true
+}
+
+// TestOOB tests out-of-bailiwick (OOB) nameserver resolution.
+// pnnl.gov uses nameservers in .net (adns1.es.net, adns2.es.net),
+// which .gov nameservers cannot provide glue records for.
+// See https://github.com/domainr/dnsr/issues/174
+func TestOOB(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr("pnnl.gov", "A")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 3, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "NS" }) >= 2, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true)
+}
+
+// TestOOBOtherDomains tests other domains from issue #174.
+func TestOOBOtherDomains(t *testing.T) {
+	r := NewResolver()
+	for _, domain := range []string{"lbl.gov", "nrel.gov"} {
+		rrs, err := r.ResolveErr(domain, "A")
+		if err != nil {
+			t.Errorf("%s: %v", domain, err)
+			continue
+		}
+		if len(rrs) == 0 {
+			t.Errorf("%s: no records returned", domain)
+		}
+	}
 }

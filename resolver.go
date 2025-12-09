@@ -396,7 +396,11 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 	// Cache records returned
 	rrs := r.saveDNSRR(host, qname, append(append(rmsg.Answer, rmsg.Ns...), rmsg.Extra...))
 
-	// Resolve IP addresses of TLD name servers if NS query doesn’t return additional section
+	// Resolve IP addresses of nameservers if the response didn't include glue records.
+	// This handles out-of-bailiwick (OOB) referrals where the nameserver is outside the
+	// queried domain's hierarchy (e.g., pnnl.gov using adns1.es.net as its NS).
+	// In OOB cases, the parent zone's server cannot provide glue records, so we must
+	// resolve the NS address separately. See https://github.com/domainr/dnsr/issues/174
 	if qtype == "NS" {
 		for _, rr := range rrs {
 			if rr.Type != "NS" {
@@ -410,9 +414,23 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 				break
 			}
 			if len(arrs) == 0 {
+				// Try asking the current nameserver for the NS's A record (fast path).
+				// This works when glue records are available or the NS is in-bailiwick.
 				arrs, err = r.exchangeIP(ctx, host, ip, rr.Value, "A", depth+1)
+				if err == NXDOMAIN {
+					// The nameserver returned NXDOMAIN, which likely means out-of-bailiwick
+					// (e.g., asking a .gov server for a .net address). This NXDOMAIN is
+					// not authoritative, so remove it from cache and resolve from root instead.
+					r.cache.deleteNX(rr.Value)
+					arrs, err = r.resolve(ctx, rr.Value, "A", depth+1)
+					if err == NXDOMAIN {
+						// NS truly doesn't exist, try the next nameserver
+						continue
+					}
+				}
 				if err != nil {
-					break
+					// On timeout or other transient errors, try the next nameserver
+					continue
 				}
 			}
 			rrs = append(rrs, arrs...)

@@ -56,3 +56,39 @@ func TestCacheContention(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestDeleteNX(t *testing.T) {
+	c := newCache(100, false)
+
+	// Add NXDOMAIN entry
+	c.addNX("nonexistent.")
+	rrs := c.get("nonexistent.")
+	st.Expect(t, len(rrs), 0) // NXDOMAIN returns empty slice
+
+	// Delete the NXDOMAIN entry
+	c.deleteNX("nonexistent.")
+	rrs = c.get("nonexistent.")
+	st.Expect(t, rrs, RRs(nil)) // Entry should be completely gone
+
+	// Verify deleteNX doesn't affect non-NXDOMAIN entries
+	rr := RR{Name: "exists.", Type: "A", Value: "1.2.3.4"}
+	c.add("exists.", rr)
+	c.deleteNX("exists.") // Should not delete because it's not an NX entry
+	rrs = c.get("exists.")
+	st.Expect(t, len(rrs), 1) // Entry should still exist
+}
+
+func TestDeleteNXConcurrent(t *testing.T) {
+	c := newCache(100, false)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c.addNX("concurrent.")
+			c.deleteNX("concurrent.")
+		}()
+	}
+	wg.Wait()
+}
