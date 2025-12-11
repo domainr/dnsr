@@ -351,11 +351,12 @@ func (r *Resolver) exchangeIP(ctx context.Context, host, ip, qname, qtype string
 			client.Timeout = dl.Sub(start)
 		}
 		// Retry with TCP
-		conn, err := dialer.DialContext(ctx, "tcp", addr)
+		var tcpConn net.Conn
+		tcpConn, err = dialer.DialContext(ctx, "tcp", addr)
 		if err == nil {
-			dconn := &dns.Conn{Conn: conn}
+			dconn := &dns.Conn{Conn: tcpConn}
 			rmsg, dur, err = client.ExchangeWithConnContext(ctx, &qmsg, dconn)
-			conn.Close()
+			tcpConn.Close()
 		}
 	}
 
