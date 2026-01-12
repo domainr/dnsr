@@ -170,15 +170,6 @@ func TestGoogleMulti(t *testing.T) {
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }), 0)
 }
 
-func TestGoogleCNAME(t *testing.T) {
-	r := NewResolver()
-	rrs, err := r.ResolveErr("www.github.com", "A")
-	st.Expect(t, err, nil)
-	st.Expect(t, len(rrs) >= 1, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "CNAME" }) >= 1, true) // resolved first
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true) // records for CNAME target
-}
-
 func TestGoogleTXT(t *testing.T) {
 	checkTXT(t, "google.com")
 }
@@ -197,6 +188,15 @@ func TestGoogleTXTTCPRetry(t *testing.T) {
 	rrs2, err := r2.ResolveErr("google.com", "TXT")
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs2) > len(rrs), true)
+}
+
+func TestGithubCNAME(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr("www.github.com", "A")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 1, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "CNAME" }) >= 1, true) // resolved first
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true)     // records for CNAME target
 }
 
 func TestAppleA(t *testing.T) {
