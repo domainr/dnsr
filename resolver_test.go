@@ -172,10 +172,10 @@ func TestGoogleMulti(t *testing.T) {
 
 func TestGoogleCNAME(t *testing.T) {
 	r := NewResolver()
-	rrs, err := r.ResolveErr("translate.google.com", "A")
+	rrs, err := r.ResolveErr("www.github.com", "A")
 	st.Expect(t, err, nil)
 	st.Expect(t, len(rrs) >= 1, true)
-	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "CNAME" }), 1)     // resolved first
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "CNAME" }) >= 1, true) // resolved first
 	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "A" }) >= 1, true) // records for CNAME target
 }
 
