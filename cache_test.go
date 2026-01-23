@@ -50,7 +50,7 @@ func TestCacheContention(t *testing.T) {
 		c.add(k, rr)
 		wg.Done()
 	}
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		wg.Add(1)
 		go f()
 	}
@@ -82,7 +82,7 @@ func TestDeleteNXConcurrent(t *testing.T) {
 	c := newCache(100, false)
 	var wg sync.WaitGroup
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()

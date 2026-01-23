@@ -107,7 +107,7 @@ func TestResolverCache(t *testing.T) {
 	r.cache.m.Lock()
 	st.Expect(t, len(r.cache.entries), 0)
 	r.cache.m.Unlock()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		r.Resolve(fmt.Sprintf("%d.com", i), "")
 	}
 	r.cache.m.Lock()
@@ -300,14 +300,14 @@ var testResolver *Resolver
 
 func BenchmarkResolve(b *testing.B) {
 	testResolver = NewResolver()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		testResolve()
 	}
 }
 
 func BenchmarkResolveErr(b *testing.B) {
 	testResolver = NewResolver()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		testResolveErr()
 	}
 }
@@ -329,7 +329,7 @@ func testResolveErr() {
 // BenchmarkResolveOOB benchmarks resolution of domains with out-of-bailiwick nameservers.
 func BenchmarkResolveOOB(b *testing.B) {
 	testResolver = NewResolver()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		testResolver.ResolveErr("pnnl.gov", "A")
 	}
 }
