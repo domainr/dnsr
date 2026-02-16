@@ -359,6 +359,18 @@ func all(rrs RRs, f func(RR) bool) (out bool) {
 	return true
 }
 
+// TestMultiLabelDelegationPTR tests resolution across multi-label delegations
+// in reverse DNS, where a parent zone delegates several labels down
+// (e.g. 8.in-addr.arpa delegates 8.8.8.in-addr.arpa directly, skipping 8.8.in-addr.arpa).
+// See https://github.com/domainr/dnsr/issues/148
+func TestMultiLabelDelegationPTR(t *testing.T) {
+	r := NewResolver()
+	rrs, err := r.ResolveErr("8.8.8.8.in-addr.arpa", "PTR")
+	st.Expect(t, err, nil)
+	st.Expect(t, len(rrs) >= 1, true)
+	st.Expect(t, count(rrs, func(rr RR) bool { return rr.Type == "PTR" }) >= 1, true)
+}
+
 // TestOOB tests out-of-bailiwick (OOB) nameserver resolution.
 // pnnl.gov uses nameservers in .net (adns1.es.net, adns2.es.net),
 // which .gov nameservers cannot provide glue records for.
