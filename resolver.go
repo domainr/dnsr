@@ -243,6 +243,8 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 			count++
 		}
 
+		queried := count
+
 		// Wait for answer, error, or cancellation
 		for ; count > 0; count-- {
 			select {
@@ -266,7 +268,12 @@ func (r *Resolver) iterateParents(ctx context.Context, qname, qtype string, dept
 		}
 
 		// NS queries naturally recurse, so stop further iteration
-		if qtype == "NS" {
+		// when we found and queried nameservers for this parent.
+		// Continue if no nameservers were found, to handle
+		// multi-label delegations where a parent zone delegates
+		// several labels down (e.g. in-addr.arpa).
+		// See https://github.com/domainr/dnsr/issues/148
+		if qtype == "NS" && queried > 0 {
 			return nil, err
 		}
 	}
