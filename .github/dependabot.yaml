@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    groups:
+      github-actions-minor-patch:
+        update-types:
+          - minor
+          - patch
 
   - package-ecosystem: gomod
     directory: "/"
@@ -12,3 +17,9 @@ updates:
       interval: weekly
       time: "09:00"
     open-pull-requests-limit: 10
+    cooldown:
+      default-days: 14
+    groups:
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
