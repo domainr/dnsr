@@ -387,7 +387,7 @@ func TestOOB(t *testing.T) {
 // TestOOBOtherDomains tests other domains from issue #174.
 func TestOOBOtherDomains(t *testing.T) {
 	r := NewResolver()
-	for _, domain := range []string{"lbl.gov", "nrel.gov"} {
+	for _, domain := range []string{"lbl.gov", "ornl.gov"} {
 		rrs, err := r.ResolveErr(domain, "A")
 		if err != nil {
 			t.Errorf("%s: %v", domain, err)
